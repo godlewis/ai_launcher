@@ -1,0 +1,27 @@
+# 编译生成的可执行文件
+*.exe
+*.dll
+
+# 编译生成的目标文件和资源文件
+*.o
+*.obj
+*.res
+
+# 临时文件
+nul
+*.tmp
+*.temp
+
+# IDE和编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+
+# Claude Code相关
+openspec/AGENTS.md
