@@ -1,0 +1,9 @@
+#include <windows.h>
+
+// 应用程序图标资源
+1 ICON "app.ico"
+2 ICON "logo.ico"
+
+// 也可以使用名称定义
+APP_ICON ICON "app.ico"
+LOGO_ICON ICON "logo.ico"

@@ -23,9 +23,6 @@
 #pragma comment(linker, "/subsystem:windows")
 #pragma comment(lib, "comctl32.lib")
 
-// 图标资源ID
-#define IDI_APP_ICON 1001
-
 // 函数声明
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void LaunchAITool(HWND hwnd, const wchar_t* command, const wchar_t* toolName, const wchar_t* workingDir);
@@ -66,8 +63,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wc.lpszClassName = className;
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    // 使用自定义图标
-    wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
+    // 使用系统图标，看起来更像AI应用
+    wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(1));
 
     if (!RegisterClassW(&wc)) {
         MessageBoxW(NULL, L"注册窗口类失败!", L"错误", MB_OK | MB_ICONERROR);
@@ -95,13 +92,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return 1;
     }
 
-    // 设置窗口图标
-    HICON hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
-    if (hIcon) {
-        SendMessage(g_hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-        SendMessage(g_hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-    }
-
     ShowWindow(g_hwnd, nCmdShow);
     UpdateWindow(g_hwnd);
 
@@ -118,7 +108,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                     LaunchAITool(g_hwnd, L"qwen -y", L"Qwen", g_workingDir);
                     continue;
                 case '3':
-                    LaunchAITool(g_hwnd, L"codex", L"Codex", g_workingDir);
+                    LaunchAITool(g_hwnd, L"codex.cmd", L"Codex", g_workingDir);
                     continue;
             }
         }
@@ -239,56 +229,33 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 void LaunchAITool(HWND hwnd, const wchar_t* command, const wchar_t* toolName, const wchar_t* workingDir) {
     // 构建完整的cmd命令
-    wchar_t fullCommand[1024];
+    wchar_t fullCommand[512];
     wcscpy(fullCommand, L"/k ");
     wcscat(fullCommand, command);
-
-    // 构建cmd.exe路径
-    wchar_t cmdPath[MAX_PATH];
-    GetSystemDirectoryW(cmdPath, MAX_PATH);
-    wcscat(cmdPath, L"\\cmd.exe");
 
     // 确定工作目录
     const wchar_t* launchDir = (workingDir[0] != L'\0') ? workingDir : NULL;
 
-    // 使用CreateProcessW来确保环境变量正确传递
-    STARTUPINFOW si = {sizeof(si)};
-    PROCESS_INFORMATION pi;
-
-    // 创建进程
-    BOOL success = CreateProcessW(
-        cmdPath,           // 应用程序路径
-        fullCommand,       // 命令行参数
-        NULL,              // 进程安全属性
-        NULL,              // 线程安全属性
-        TRUE,              // 继承句柄
-        CREATE_NEW_CONSOLE, // 创建新控制台
-        NULL,              // 使用当前进程的环境变量（继承所有环境变量）
-        launchDir,         // 工作目录
-        &si,               // 启动信息
-        &pi                // 进程信息
+    // 尝试启动AI工具
+    HINSTANCE result = ShellExecuteW(
+        NULL,
+        L"open",
+        L"cmd.exe",
+        fullCommand,
+        launchDir,  // 设置工作目录
+        SW_SHOWNORMAL
     );
 
-    if (success) {
-        // 进程创建成功，关闭句柄并退出主窗口
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        DestroyWindow(hwnd);
-    } else {
+    // 检查启动结果
+    if ((int)result <= 32) {
         // 启动失败，显示错误消息
         wchar_t errorMsg[512];
         wcscpy(errorMsg, toolName);
         wcscat(errorMsg, L"应用未安装或启动失败");
-
-        // 获取详细错误信息
-        DWORD error = GetLastError();
-        if (error == ERROR_FILE_NOT_FOUND) {
-            wcscat(errorMsg, L" (命令未找到)");
-        } else if (error == ERROR_ACCESS_DENIED) {
-            wcscat(errorMsg, L" (访问被拒绝)");
-        }
-
         ShowErrorBox(hwnd, errorMsg);
+    } else {
+        // 启动成功，退出主窗口
+        DestroyWindow(hwnd);
     }
 }
 
@@ -357,8 +324,8 @@ BOOL ValidateWorkingDirectory(const wchar_t* path) {
     }
 
     // 尝试设置当前目录来验证路径
-    BOOL result = SetCurrentDirectoryW(path);
-    if (result != 0) {
+    DWORD oldAttr = SetCurrentDirectoryW(path);
+    if (oldAttr != 0) {
         // 恢复原始目录（虽然程序即将退出，但这是一个好习惯）
         wchar_t currentDir[MAX_PATH_LENGTH];
         GetCurrentDirectoryW(MAX_PATH_LENGTH, currentDir);

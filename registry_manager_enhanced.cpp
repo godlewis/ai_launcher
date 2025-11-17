@@ -2,26 +2,25 @@
 #include <stdio.h>
 #include <commctrl.h>
 #include <shlobj.h>
+#include <shlwapi.h>
 
 // 按钮ID定义
 #define ID_REGISTER_BUTTON 1001
 #define ID_UNREGISTER_BUTTON 1002
 #define ID_STATUS_LABEL 1003
 
-// 图标资源ID
-#define IDI_REGISTRY_ICON 1001
-
 // 窗口尺寸常量
 #define WINDOW_WIDTH 400
-#define WINDOW_HEIGHT 200
+#define WINDOW_HEIGHT 220
 #define BUTTON_WIDTH 120
 #define BUTTON_HEIGHT 35
+#define BUTTON_SPACING 20
 
-// 注册表路径 - 同时支持Directory和Directory\\Background
-const wchar_t* REGISTRY_PATH = L"Directory\\shell\\AITools";
-const wchar_t* BACKGROUND_REGISTRY_PATH = L"Directory\\Background\\shell\\AITools";
-const wchar_t* COMMAND_PATH = L"Directory\\shell\\AITools\\command";
-const wchar_t* BACKGROUND_COMMAND_PATH = L"Directory\\Background\\shell\\AITools\\command";
+// 注册表路径 - 支持Directory和Directory\Background
+const wchar_t* REGISTRY_PATH_DIR = L"Directory\\shell\\AITools";
+const wchar_t* REGISTRY_PATH_BACKGROUND = L"Directory\\Background\\shell\\AITools";
+const wchar_t* COMMAND_PATH_DIR = L"Directory\\shell\\AITools\\command";
+const wchar_t* COMMAND_PATH_BACKGROUND = L"Directory\\Background\\shell\\AITools\\command";
 
 // 设置为Windows子系统
 #pragma comment(linker, "/subsystem:windows")
@@ -35,8 +34,6 @@ void ShowMessage(HWND hwnd, const wchar_t* message, BOOL isError);
 BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath);
 BOOL UnregisterContextMenu(HWND hwnd);
 BOOL FindAILauncherPath(wchar_t* path, DWORD pathSize);
-BOOL IsContextMenuRegistered();
-BOOL IsContextMenuFullyRegistered();
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     // 初始化通用控件
@@ -51,7 +48,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wc.lpszClassName = className;
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_REGISTRY_ICON));
+    wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(100));
 
     if (!RegisterClassW(&wc)) {
         MessageBoxW(NULL, L"注册窗口类失败!", L"错误", MB_OK | MB_ICONERROR);
@@ -77,13 +74,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     if (!hwnd) {
         MessageBoxW(NULL, L"创建窗口失败!", L"错误", MB_OK | MB_ICONERROR);
         return 1;
-    }
-
-    // 设置窗口图标
-    HICON hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_REGISTRY_ICON));
-    if (hIcon) {
-        SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-        SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
     }
 
     ShowWindow(hwnd, nCmdShow);
@@ -124,7 +114,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 L"BUTTON",
                 L"注册右键菜单",
                 WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-                centerX - BUTTON_WIDTH - 10, centerY - BUTTON_HEIGHT/2,
+                centerX - BUTTON_WIDTH - 10, centerY - BUTTON_HEIGHT/2 - 10,
                 BUTTON_WIDTH, BUTTON_HEIGHT,
                 hwnd,
                 (HMENU)ID_REGISTER_BUTTON,
@@ -137,10 +127,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 L"BUTTON",
                 L"卸载右键菜单",
                 WS_TABSTOP | WS_VISIBLE | WS_CHILD,
-                centerX + 10, centerY - BUTTON_HEIGHT/2,
+                centerX + 10, centerY - BUTTON_HEIGHT/2 - 10,
                 BUTTON_WIDTH, BUTTON_HEIGHT,
                 hwnd,
                 (HMENU)ID_UNREGISTER_BUTTON,
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL
+            );
+
+            // 创建说明标签
+            HWND hInfoLabel = CreateWindowW(
+                L"STATIC",
+                L"支持文件夹和目录背景右键菜单",
+                WS_CHILD | WS_VISIBLE | SS_CENTER,
+                50, centerY + 20,
+                WINDOW_WIDTH - 100, 20,
+                hwnd,
+                NULL,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL
             );
@@ -161,7 +164,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     wchar_t aiLauncherPath[MAX_PATH];
                     if (FindAILauncherPath(aiLauncherPath, MAX_PATH)) {
                         if (RegisterContextMenu(hwnd, aiLauncherPath)) {
-                            ShowMessage(hwnd, L"右键菜单注册成功！\n现在支持：\n• 文件夹右键\n• 背景右键", FALSE);
+                            ShowMessage(hwnd, L"右键菜单注册成功！", FALSE);
                             UpdateUIState(hwnd);
                         }
                     } else {
@@ -192,33 +195,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     return 0;
 }
 
-// 检查右键菜单是否已注册（检查主路径）
+// 检查右键菜单是否已注册
 BOOL IsContextMenuRegistered() {
-    HKEY hKey;
-    if (RegOpenKeyExW(HKEY_CLASSES_ROOT, REGISTRY_PATH, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        RegCloseKey(hKey);
-        return TRUE;
-    }
-    return FALSE;
-}
-
-// 检查右键菜单是否已注册（包含背景路径）
-BOOL IsContextMenuFullyRegistered() {
     HKEY hKey1, hKey2;
-    BOOL hasDirectory = FALSE;
-    BOOL hasBackground = FALSE;
+    bool dirRegistered = false, bgRegistered = false;
 
-    if (RegOpenKeyExW(HKEY_CLASSES_ROOT, REGISTRY_PATH, 0, KEY_READ, &hKey1) == ERROR_SUCCESS) {
-        hasDirectory = TRUE;
+    // 检查Directory注册表项
+    if (RegOpenKeyExW(HKEY_CLASSES_ROOT, REGISTRY_PATH_DIR, 0, KEY_READ, &hKey1) == ERROR_SUCCESS) {
         RegCloseKey(hKey1);
+        dirRegistered = true;
     }
 
-    if (RegOpenKeyExW(HKEY_CLASSES_ROOT, BACKGROUND_REGISTRY_PATH, 0, KEY_READ, &hKey2) == ERROR_SUCCESS) {
-        hasBackground = TRUE;
+    // 检查Directory\Background注册表项
+    if (RegOpenKeyExW(HKEY_CLASSES_ROOT, REGISTRY_PATH_BACKGROUND, 0, KEY_READ, &hKey2) == ERROR_SUCCESS) {
         RegCloseKey(hKey2);
+        bgRegistered = true;
     }
 
-    return (hasDirectory && hasBackground);
+    return dirRegistered || bgRegistered;
 }
 
 // 查找ai_launcher.exe路径
@@ -242,112 +236,98 @@ BOOL FindAILauncherPath(wchar_t* path, DWORD pathSize) {
     return (fileAttr != INVALID_FILE_ATTRIBUTES && !(fileAttr & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-// 注册右键菜单（同时支持Directory和Directory\\Background）
+// 注册右键菜单 - 支持Directory和Directory\Background
 BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath) {
     HKEY hKey = NULL;
-    BOOL success = FALSE;
-
-    // 1. 注册到Directory（文件本身右键）
-    if (RegCreateKeyExW(HKEY_CLASSES_ROOT, REGISTRY_PATH, 0, NULL,
-                       REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) != ERROR_SUCCESS) {
-        ShowMessage(hwnd, L"无法创建Directory注册表项", TRUE);
-        return FALSE;
-    }
-
-    // 设置菜单项名称
-    if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)L"用AI工具打开",
-                      (wcslen(L"用AI工具打开") + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
-        ShowMessage(hwnd, L"无法设置Directory菜单项名称", TRUE);
-        RegCloseKey(hKey);
-        return FALSE;
-    }
-
-    // 设置图标 - 使用ai_launcher.exe的图标
-    wchar_t iconValue[MAX_PATH + 10];
-    wcscpy(iconValue, aiLauncherPath);
-    wcscat(iconValue, L",0");
-    if (RegSetValueExW(hKey, L"Icon", 0, REG_SZ, (const BYTE*)iconValue,
-                      (wcslen(iconValue) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
-        ShowMessage(hwnd, L"无法设置Directory图标", TRUE);
-        RegCloseKey(hKey);
-        return FALSE;
-    }
-
-    RegCloseKey(hKey);
-
-    // 创建Directory\\command子项
-    if (RegCreateKeyExW(HKEY_CLASSES_ROOT, COMMAND_PATH, 0, NULL,
-                       REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) != ERROR_SUCCESS) {
-        ShowMessage(hwnd, L"无法创建Directory command注册表项", TRUE);
-        return FALSE;
-    }
-
-    // 设置启动命令
+    BOOL success = TRUE;
     wchar_t command[MAX_PATH + 20];
-    wcscpy(command, L"\"");
-    wcscat(command, aiLauncherPath);
-    wcscat(command, L" \"%1\"");
-    if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)command,
-                      (wcslen(command) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
-        ShowMessage(hwnd, L"无法设置Directory启动命令", TRUE);
-        RegCloseKey(hKey);
-        return FALSE;
-    }
+    wchar_t iconValue[MAX_PATH + 10];
 
-    RegCloseKey(hKey);
+    // 1. 注册到Directory（文件夹右键菜单）
+    if (RegCreateKeyExW(HKEY_CLASSES_ROOT, REGISTRY_PATH_DIR, 0, NULL,
+                       REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
 
-    // 2. 注册到Directory\\Background（背景右键）
-    if (RegCreateKeyExW(HKEY_CLASSES_ROOT, BACKGROUND_REGISTRY_PATH, 0, NULL,
-                       REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) != ERROR_SUCCESS) {
-        ShowMessage(hwnd, L"无法创建Background注册表项", TRUE);
-        RegCloseKey(hKey);
-        // 继续执行，因为Directory已注册成功
-        success = TRUE;
-    } else {
         // 设置菜单项名称
         if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)L"用AI工具打开",
                           (wcslen(L"用AI工具打开") + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
-            ShowMessage(hwnd, L"无法设置Background菜单项名称", TRUE);
-            RegCloseKey(hKey);
-            return FALSE;
+            ShowMessage(hwnd, L"无法设置文件夹菜单项名称", TRUE);
+            success = FALSE;
         }
 
-        // 设置图标 - 使用ai_launcher.exe的图标
-        wcscpy(iconValue, aiLauncherPath);
-        wcscat(iconValue, L",0");
+        // 使用程序自身作为图标源
+        GetModuleFileNameW(NULL, iconValue, MAX_PATH);
         if (RegSetValueExW(hKey, L"Icon", 0, REG_SZ, (const BYTE*)iconValue,
                           (wcslen(iconValue) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
-            ShowMessage(hwnd, L"无法设置Background图标", TRUE);
-            RegCloseKey(hKey);
-            return FALSE;
+            ShowMessage(hwnd, L"无法设置文件夹菜单图标", TRUE);
+            success = FALSE;
         }
 
         RegCloseKey(hKey);
 
-        // 创建Background\\command子项
-        if (RegCreateKeyExW(HKEY_CLASSES_ROOT, BACKGROUND_COMMAND_PATH, 0, NULL,
-                           REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) != ERROR_SUCCESS) {
-            ShowMessage(hwnd, L"无法创建Background command注册表项", TRUE);
+        // 创建command子项
+        if (RegCreateKeyExW(HKEY_CLASSES_ROOT, COMMAND_PATH_DIR, 0, NULL,
+                           REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+            // 设置启动命令
+            wcscpy(command, L"\"");
+            wcscat(command, aiLauncherPath);
+            wcscat(command, L"\" \"%1\"");
+            if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)command,
+                              (wcslen(command) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
+                ShowMessage(hwnd, L"无法设置文件夹启动命令", TRUE);
+                success = FALSE;
+            }
             RegCloseKey(hKey);
-            return FALSE;
+        } else {
+            ShowMessage(hwnd, L"无法创建文件夹command注册表项", TRUE);
+            success = FALSE;
         }
-
-        // 设置启动命令
-        wcscpy(command, L"\"");
-        wcscat(command, aiLauncherPath);
-        wcscat(command, L" \"%V\"");
-        if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)command,
-                          (wcslen(command) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
-            ShowMessage(hwnd, L"无法设置Background启动命令", TRUE);
-            RegCloseKey(hKey);
-            return FALSE;
-        }
-
-        RegCloseKey(hKey);
-        success = TRUE;
+    } else {
+        ShowMessage(hwnd, L"无法创建文件夹注册表项", TRUE);
+        success = FALSE;
     }
 
-    success = TRUE;
+    // 2. 注册到Directory\Background（目录背景右键菜单）
+    if (RegCreateKeyExW(HKEY_CLASSES_ROOT, REGISTRY_PATH_BACKGROUND, 0, NULL,
+                       REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+
+        // 设置菜单项名称
+        if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)L"用AI工具打开",
+                          (wcslen(L"用AI工具打开") + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
+            ShowMessage(hwnd, L"无法设置背景菜单项名称", TRUE);
+            success = FALSE;
+        }
+
+        // 使用程序自身作为图标源
+        GetModuleFileNameW(NULL, iconValue, MAX_PATH);
+        if (RegSetValueExW(hKey, L"Icon", 0, REG_SZ, (const BYTE*)iconValue,
+                          (wcslen(iconValue) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
+            ShowMessage(hwnd, L"无法设置背景菜单图标", TRUE);
+            success = FALSE;
+        }
+
+        RegCloseKey(hKey);
+
+        // 创建command子项
+        if (RegCreateKeyExW(HKEY_CLASSES_ROOT, COMMAND_PATH_BACKGROUND, 0, NULL,
+                           REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+            // 设置启动命令
+            wcscpy(command, L"\"");
+            wcscat(command, aiLauncherPath);
+            wcscat(command, L"\" \"%V\"");
+            if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)command,
+                              (wcslen(command) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
+                ShowMessage(hwnd, L"无法设置背景启动命令", TRUE);
+                success = FALSE;
+            }
+            RegCloseKey(hKey);
+        } else {
+            ShowMessage(hwnd, L"无法创建背景command注册表项", TRUE);
+            success = FALSE;
+        }
+    } else {
+        ShowMessage(hwnd, L"无法创建背景注册表项", TRUE);
+        success = FALSE;
+    }
 
     // 通知系统刷新
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
@@ -355,26 +335,32 @@ BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath) {
     return success;
 }
 
-// 卸载右键菜单（同时清理两个路径）
+// 卸载右键菜单
 BOOL UnregisterContextMenu(HWND hwnd) {
-    // 先删除command子项
-    RegDeleteKeyW(HKEY_CLASSES_ROOT, COMMAND_PATH);
-    RegDeleteKeyW(HKEY_CLASSES_ROOT, BACKGROUND_COMMAND_PATH);
+    BOOL success = TRUE;
 
-    // 再删除主项
-    LONG result1 = RegDeleteKeyW(HKEY_CLASSES_ROOT, REGISTRY_PATH);
-    LONG result2 = RegDeleteKeyW(HKEY_CLASSES_ROOT, BACKGROUND_REGISTRY_PATH);
+    // 删除Directory下的command子项
+    RegDeleteKeyW(HKEY_CLASSES_ROOT, COMMAND_PATH_DIR);
 
-    if ((result1 != ERROR_SUCCESS && result1 != ERROR_FILE_NOT_FOUND) ||
-        (result2 != ERROR_SUCCESS && result2 != ERROR_FILE_NOT_FOUND)) {
-        ShowMessage(hwnd, L"无法删除部分注册表项", TRUE);
-        return FALSE;
+    // 删除Directory主项
+    if (RegDeleteKeyW(HKEY_CLASSES_ROOT, REGISTRY_PATH_DIR) != ERROR_SUCCESS &&
+        RegDeleteKeyW(HKEY_CLASSES_ROOT, REGISTRY_PATH_DIR) != ERROR_FILE_NOT_FOUND) {
+        success = FALSE;
+    }
+
+    // 删除Directory\Background下的command子项
+    RegDeleteKeyW(HKEY_CLASSES_ROOT, COMMAND_PATH_BACKGROUND);
+
+    // 删除Directory\Background主项
+    if (RegDeleteKeyW(HKEY_CLASSES_ROOT, REGISTRY_PATH_BACKGROUND) != ERROR_SUCCESS &&
+        RegDeleteKeyW(HKEY_CLASSES_ROOT, REGISTRY_PATH_BACKGROUND) != ERROR_FILE_NOT_FOUND) {
+        success = FALSE;
     }
 
     // 通知系统刷新
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
 
-    return TRUE;
+    return success;
 }
 
 // 更新UI状态
@@ -383,7 +369,7 @@ void UpdateUIState(HWND hwnd) {
     HWND hUnregisterButton = GetDlgItem(hwnd, ID_UNREGISTER_BUTTON);
     HWND hStatusLabel = GetDlgItem(hwnd, ID_STATUS_LABEL);
 
-    BOOL isRegistered = IsContextMenuFullyRegistered();
+    BOOL isRegistered = IsContextMenuRegistered();
 
     // 更新按钮状态
     EnableWindow(hRegisterButton, !isRegistered);
@@ -391,7 +377,7 @@ void UpdateUIState(HWND hwnd) {
 
     // 更新状态标签
     if (isRegistered) {
-        SetWindowTextW(hStatusLabel, L"右键菜单已注册（文件夹+背景）");
+        SetWindowTextW(hStatusLabel, L"右键菜单已注册（支持文件夹和背景右键）");
         SetWindowTextW(hRegisterButton, L"重新注册");
     } else {
         SetWindowTextW(hStatusLabel, L"右键菜单未注册");
