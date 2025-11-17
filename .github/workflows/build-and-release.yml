@@ -1,0 +1,87 @@
+name: Build and Release Windows EXE
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.3
+
+    - name: Build ai_launcher.exe
+      run: |
+        mkdir build
+        cd build
+
+        if (Test-Path "..\icons.rc") {
+            rc /fo icons.res ..\icons.rc
+            cl ..\ai_launcher.cpp icons.res /Fe:ai_launcher.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+        } else {
+            cl ..\ai_launcher.cpp /Fe:ai_launcher.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+        }
+
+        if (Test-Path "..\registry_resources.rc") {
+            rc /fo registry_res.res ..\registry_resources.rc
+            cl ..\registry_manager.cpp registry_res.res /Fe:registry_manager.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+        } else {
+            cl ..\registry_manager.cpp /Fe:registry_manager.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+        }
+
+        copy *.exe ..\
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          ai_launcher.exe
+          registry_manager.exe
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build job for testing (does not create release)
+  test-build:
+    runs-on: windows-latest
+    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.3
+
+    - name: Test compile
+      run: |
+        # Create build directory
+        mkdir build
+        cd build
+
+        # Test build ai_launcher.exe
+        if (Test-Path "..\icons.rc") {
+            rc /fo icons.res ..\icons.rc
+            cl ..\ai_launcher.cpp icons.res /Fe:ai_launcher_test.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+        } else {
+            cl ..\ai_launcher.cpp /Fe:ai_launcher_test.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+        }
+
+        # Test build registry_manager.exe
+        if (Test-Path "..\registry_resources.rc") {
+            rc /fo registry_res.res ..\registry_resources.rc
+            cl ..\registry_manager.cpp registry_res.res /Fe:registry_manager_test.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+        } else {
+            cl ..\registry_manager.cpp /Fe:registry_manager_test.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+        }
+
+        echo "Build completed successfully!"
+        dir *.exe
