@@ -17,40 +17,87 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v1.3
 
-    - name: Setup Windows SDK
-      uses: GuillaumeFalourd/setup-windows-sdk-action@v1
+    - name: Setup Developer Command Prompt
+      uses: ilammy/msvc-dev-cmd@v1
       with:
-        sdk-version: 22621
+        arch: x64
 
-    - name: Add Windows SDK to PATH
-      run: |
-        echo "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x86" >> $env:GITHUB_PATH
-        echo "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64" >> $env:GITHUB_PATH
-
-    - name: Build ai_launcher.exe
+    - name: Build executables
       run: |
         mkdir build
         cd build
 
-        # Try to find and use rc.exe from Windows SDK
-        $rcPath = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\rc.exe"
-        if (Test-Path $rcPath) {
-            & $rcPath /fo icons.res ..\icons.rc
+        Write-Host "Building ai_launcher.exe..."
+
+        # Build ai_launcher.exe
+        try {
+          if (Test-Path "..\icons.rc") {
+            Write-Host "Found icons.rc, compiling with resources..."
+            rc /fo icons.res ..\icons.rc
             cl ..\ai_launcher.cpp icons.res /Fe:ai_launcher.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
-        } else {
-            # Fallback: build without resources
+          } else {
+            Write-Host "No icons.rc found, building without resources..."
             cl ..\ai_launcher.cpp /Fe:ai_launcher.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+          }
+
+          if (Test-Path "ai_launcher.exe") {
+            Write-Host "✅ ai_launcher.exe built successfully"
+          } else {
+            Write-Host "❌ ai_launcher.exe build failed"
+            exit 1
+          }
+        } catch {
+          Write-Host "Error building ai_launcher.exe: $_"
+          Write-Host "Trying without resources..."
+          cl ..\ai_launcher.cpp /Fe:ai_launcher.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+
+          if (Test-Path "ai_launcher.exe") {
+            Write-Host "✅ ai_launcher.exe built successfully (without resources)"
+          } else {
+            Write-Host "❌ ai_launcher.exe build failed completely"
+            exit 1
+          }
         }
 
-        # Build registry_manager.exe with same logic
-        if (Test-Path $rcPath) {
-            & $rcPath /fo registry_res.res ..\registry_resources.rc
+        Write-Host "Building registry_manager.exe..."
+
+        # Build registry_manager.exe
+        try {
+          if (Test-Path "..\registry_resources.rc") {
+            Write-Host "Found registry_resources.rc, compiling with resources..."
+            rc /fo registry_res.res ..\registry_resources.rc
             cl ..\registry_manager.cpp registry_res.res /Fe:registry_manager.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
-        } else {
+          } else {
+            Write-Host "No registry_resources.rc found, building without resources..."
             cl ..\registry_manager.cpp /Fe:registry_manager.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+          }
+
+          if (Test-Path "registry_manager.exe") {
+            Write-Host "✅ registry_manager.exe built successfully"
+          } else {
+            Write-Host "❌ registry_manager.exe build failed"
+            exit 1
+          }
+        } catch {
+          Write-Host "Error building registry_manager.exe: $_"
+          Write-Host "Trying without resources..."
+          cl ..\registry_manager.cpp /Fe:registry_manager.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
+
+          if (Test-Path "registry_manager.exe") {
+            Write-Host "✅ registry_manager.exe built successfully (without resources)"
+          } else {
+            Write-Host "❌ registry_manager.exe build failed completely"
+            exit 1
+          }
         }
 
-        copy *.exe ..\
+        # List built files
+        Write-Host "Built files:"
+        dir *.exe
+
+        # Copy executables to root
+        copy ai_launcher.exe ..\
+        copy registry_manager.exe ..\
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
