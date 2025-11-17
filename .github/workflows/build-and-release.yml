@@ -23,22 +23,31 @@ jobs:
         arch: x64
 
     - name: Build executables
+      shell: powershell
       run: |
-        mkdir build
-        cd build
+        # Create build directory
+        New-Item -ItemType Directory -Force -Path build
+        Set-Location build
 
+        Write-Host "Starting build process..."
+
+        # Check if source files exist
+        if (-not (Test-Path "..\ai_launcher.cpp")) {
+          Write-Host "❌ ai_launcher.cpp not found"
+          exit 1
+        }
+
+        if (-not (Test-Path "..\registry_manager.cpp")) {
+          Write-Host "❌ registry_manager.cpp not found"
+          exit 1
+        }
+
+        Write-Host "✅ Source files found"
+
+        # Build ai_launcher.exe (without resources for simplicity)
         Write-Host "Building ai_launcher.exe..."
-
-        # Build ai_launcher.exe
         try {
-          if (Test-Path "..\icons.rc") {
-            Write-Host "Found icons.rc, compiling with resources..."
-            rc /fo icons.res ..\icons.rc
-            cl ..\ai_launcher.cpp icons.res /Fe:ai_launcher.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
-          } else {
-            Write-Host "No icons.rc found, building without resources..."
-            cl ..\ai_launcher.cpp /Fe:ai_launcher.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
-          }
+          cl ..\ai_launcher.cpp /Fe:ai_launcher.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
 
           if (Test-Path "ai_launcher.exe") {
             Write-Host "✅ ai_launcher.exe built successfully"
@@ -47,30 +56,14 @@ jobs:
             exit 1
           }
         } catch {
-          Write-Host "Error building ai_launcher.exe: $_"
-          Write-Host "Trying without resources..."
-          cl ..\ai_launcher.cpp /Fe:ai_launcher.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
-
-          if (Test-Path "ai_launcher.exe") {
-            Write-Host "✅ ai_launcher.exe built successfully (without resources)"
-          } else {
-            Write-Host "❌ ai_launcher.exe build failed completely"
-            exit 1
-          }
+          Write-Host "❌ Error building ai_launcher.exe: $_"
+          exit 1
         }
 
+        # Build registry_manager.exe (without resources for simplicity)
         Write-Host "Building registry_manager.exe..."
-
-        # Build registry_manager.exe
         try {
-          if (Test-Path "..\registry_resources.rc") {
-            Write-Host "Found registry_resources.rc, compiling with resources..."
-            rc /fo registry_res.res ..\registry_resources.rc
-            cl ..\registry_manager.cpp registry_res.res /Fe:registry_manager.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
-          } else {
-            Write-Host "No registry_resources.rc found, building without resources..."
-            cl ..\registry_manager.cpp /Fe:registry_manager.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
-          }
+          cl ..\registry_manager.cpp /Fe:registry_manager.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
 
           if (Test-Path "registry_manager.exe") {
             Write-Host "✅ registry_manager.exe built successfully"
@@ -79,25 +72,27 @@ jobs:
             exit 1
           }
         } catch {
-          Write-Host "Error building registry_manager.exe: $_"
-          Write-Host "Trying without resources..."
-          cl ..\registry_manager.cpp /Fe:registry_manager.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib /SUBSYSTEM:WINDOWS
-
-          if (Test-Path "registry_manager.exe") {
-            Write-Host "✅ registry_manager.exe built successfully (without resources)"
-          } else {
-            Write-Host "❌ registry_manager.exe build failed completely"
-            exit 1
-          }
+          Write-Host "❌ Error building registry_manager.exe: $_"
+          exit 1
         }
 
         # List built files
         Write-Host "Built files:"
-        dir *.exe
+        Get-ChildItem *.exe
 
         # Copy executables to root
-        copy ai_launcher.exe ..\
-        copy registry_manager.exe ..\
+        Copy-Item ai_launcher.exe ..\ -Force
+        Copy-Item registry_manager.exe ..\ -Force
+
+        Write-Host "✅ Build process completed successfully"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: executables
+        path: |
+          ai_launcher.exe
+          registry_manager.exe
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
