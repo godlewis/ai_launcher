@@ -8,10 +8,8 @@
 #define ID_REGISTER_BUTTON 1001
 #define ID_UNREGISTER_BUTTON 1002
 #define ID_STATUS_LABEL 1003
-#define ID_TERMINAL_COMBO 1004
-#define ID_TERMINAL_PATH_LABEL 1005
-#define ID_BROWSE_BUTTON 1006
-#define ID_TERMINAL_GROUP 1007
+#define ID_TERMINAL_EDIT 1004
+#define ID_BROWSE_BUTTON 1005
 
 // 窗口尺寸常量
 #define WINDOW_WIDTH 450
@@ -166,7 +164,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 30, 130, WINDOW_WIDTH - 60, 100,
                 hwnd,
-                (HMENU)ID_TERMINAL_GROUP,
+                (HMENU)ID_STATUS_LABEL,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL
             );
@@ -190,7 +188,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
                 50, 180, 290, 25,
                 hwnd,
-                (HMENU)ID_TERMINAL_COMBO, // 重用ID，改为文本框
+                (HMENU)ID_TERMINAL_EDIT,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL
             );
@@ -229,7 +227,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 case ID_REGISTER_BUTTON:
                 {
                     // 获取文本框中的终端路径
-                    HWND hEdit = GetDlgItem(hwnd, ID_TERMINAL_COMBO);
+                    HWND hEdit = GetDlgItem(hwnd, ID_TERMINAL_EDIT);
                     wchar_t terminalPath[MAX_PATH];
                     GetWindowTextW(hEdit, terminalPath, MAX_PATH);
 
@@ -286,7 +284,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         // 验证选择的终端
                         if (ValidateTerminal(selectedPath)) {
                             // 直接设置到文本框
-                            HWND hEdit = GetDlgItem(hwnd, ID_TERMINAL_COMBO);
+                            HWND hEdit = GetDlgItem(hwnd, ID_TERMINAL_EDIT);
                             SetWindowTextW(hEdit, selectedPath);
                         } else {
                             MessageBoxW(hwnd, L"选择的文件不是有效的终端程序", L"错误", MB_OK | MB_ICONERROR);
@@ -367,16 +365,8 @@ BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath) {
             success = FALSE;
         }
 
-        // 使用程序自身资源中的图标
-        GetModuleFileNameW(NULL, iconValue, MAX_PATH);
-        if (iconValue[0] != L'\0') {
-            // 指向资源中的图标，ID为2 (logo.ico)
-            wchar_t* lastBackslash = wcsrchr(iconValue, L'\\');
-            if (lastBackslash) {
-                *(lastBackslash + 1) = L'\0';
-                wcscat(iconValue, L",-2"); // 使用资源ID 2
-            }
-        }
+        // 使用Windows系统图标
+        wcscpy(iconValue, L"shell32.dll,-25"); // 使用应用程序图标
         if (RegSetValueExW(hKey, L"Icon", 0, REG_SZ, (const BYTE*)iconValue,
                           (wcslen(iconValue) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
             ShowMessage(hwnd, L"无法设置文件夹菜单图标", TRUE);
@@ -418,16 +408,8 @@ BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath) {
             success = FALSE;
         }
 
-        // 使用程序自身资源中的图标
-        GetModuleFileNameW(NULL, iconValue, MAX_PATH);
-        if (iconValue[0] != L'\0') {
-            // 指向资源中的图标，ID为2 (logo.ico)
-            wchar_t* lastBackslash = wcsrchr(iconValue, L'\\');
-            if (lastBackslash) {
-                *(lastBackslash + 1) = L'\0';
-                wcscat(iconValue, L",-2"); // 使用资源ID 2
-            }
-        }
+        // 使用Windows系统图标
+        wcscpy(iconValue, L"shell32.dll,-25"); // 使用应用程序图标
         if (RegSetValueExW(hKey, L"Icon", 0, REG_SZ, (const BYTE*)iconValue,
                           (wcslen(iconValue) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
             ShowMessage(hwnd, L"无法设置背景菜单图标", TRUE);
