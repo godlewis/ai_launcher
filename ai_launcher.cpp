@@ -647,26 +647,30 @@ void LaunchWithTerminal(const wchar_t* terminalPath, const wchar_t* command, con
         }
     }
 
+    // 为终端路径添加引号，处理包含空格的路径
+    wchar_t quotedPath[MAX_PATH * 2];
+    wsprintfW(quotedPath, L"\"%s\"", terminalPath);
+
     // 启动终端
     HINSTANCE result;
     if (wcsstr(terminalPath, L"wt.exe") || wcsstr(terminalPath, L"WindowsTerminal.exe")) {
         // Windows Terminal: 直接传递cmd命令
-        result = ShellExecuteW(NULL, L"open", terminalPath, workingDirCommand, launchDir, SW_SHOWNORMAL);
+        result = ShellExecuteW(NULL, L"open", quotedPath, workingDirCommand, launchDir, SW_SHOWNORMAL);
     } else if (wcsstr(terminalPath, L"powershell.exe")) {
         // PowerShell: 直接将命令作为参数传递
         wchar_t finalCommand[3072];
         wsprintfW(finalCommand, L"%s \"%s\"", fullCommand, workingDirCommand);
-        result = ShellExecuteW(NULL, L"open", terminalPath, finalCommand, launchDir, SW_SHOWNORMAL);
+        result = ShellExecuteW(NULL, L"open", quotedPath, finalCommand, launchDir, SW_SHOWNORMAL);
     } else if (wcsstr(terminalPath, L"git-bash.exe")) {
         // Git Bash: 直接将命令作为参数传递
         wchar_t finalCommand[3072];
         wsprintfW(finalCommand, L"%s \"%s\"", fullCommand, workingDirCommand);
-        result = ShellExecuteW(NULL, L"open", terminalPath, finalCommand, launchDir, SW_SHOWNORMAL);
+        result = ShellExecuteW(NULL, L"open", quotedPath, finalCommand, launchDir, SW_SHOWNORMAL);
     } else {
         // cmd.exe
         wchar_t finalCommand[3072];
         wsprintfW(finalCommand, L"%s \"%s\"", fullCommand, workingDirCommand);
-        result = ShellExecuteW(NULL, L"open", terminalPath, finalCommand, launchDir, SW_SHOWNORMAL);
+        result = ShellExecuteW(NULL, L"open", quotedPath, finalCommand, launchDir, SW_SHOWNORMAL);
     }
 
     // 检查启动结果

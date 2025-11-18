@@ -10,6 +10,7 @@
 #define ID_STATUS_LABEL 1003
 #define ID_TERMINAL_EDIT 1004
 #define ID_BROWSE_BUTTON 1005
+#define ID_EXIT_BUTTON 1006
 
 // 窗口尺寸常量
 #define WINDOW_WIDTH 450
@@ -205,6 +206,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 NULL
             );
 
+            // 创建退出按钮 - 放在窗口底部右侧
+            HWND hExitButton = CreateWindowW(
+                L"BUTTON",
+                L"退出",
+                WS_TABSTOP | WS_VISIBLE | WS_CHILD,
+                WINDOW_WIDTH - 130, WINDOW_HEIGHT - 50, 80, 30,
+                hwnd,
+                (HMENU)ID_EXIT_BUTTON,
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL
+            );
+
           // 加载当前终端配置
             wchar_t currentPath[MAX_PATH] = L"";
             wchar_t currentName[256] = L"";
@@ -290,6 +303,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                             MessageBoxW(hwnd, L"选择的文件不是有效的终端程序", L"错误", MB_OK | MB_ICONERROR);
                         }
                     }
+                    break;
+                }
+
+                case ID_EXIT_BUTTON:
+                {
+                    // 退出应用程序
+                    DestroyWindow(hwnd);
                     break;
                 }
             }
