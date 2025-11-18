@@ -23,5 +23,6 @@ nul
 Thumbs.db
 Desktop.ini
 
-# Claude Code相关
-openspec/AGENTS.md
+openspec/
+AGENTS.md
+CLAUDE.md
