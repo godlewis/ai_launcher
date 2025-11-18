@@ -1,5 +1,4 @@
 #include <windows.h>
-#include <stdio.h>
 #include <commctrl.h>
 #include <string.h>
 
@@ -18,10 +17,39 @@
 
 // 常量定义
 #define MAX_PATH_LENGTH 1024
+#define MAX_TOOLS 3
 
 // 设置为Windows子系统，避免控制台窗口
 #pragma comment(linker, "/subsystem:windows")
 #pragma comment(lib, "comctl32.lib")
+
+// 工具信息结构体
+struct ToolInfo {
+    wchar_t* name;
+    wchar_t* command;
+    int shortcutKey;
+    BOOL isAvailable;
+    int buttonId;
+};
+
+// 布局信息结构体
+struct LayoutInfo {
+    int availableToolCount;
+    int windowWidth;
+    int windowHeight;
+    int buttonStartY;
+    int buttonSpacing;
+};
+
+// 终端配置注册表路径
+const wchar_t* TERMINAL_CONFIG_PATH = L"Software\\AILauncher";
+
+// 终端参数结构
+struct TerminalParams {
+    wchar_t exePath[MAX_PATH];
+    wchar_t args[5][256];
+    int argCount;
+};
 
 // 函数声明
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -29,10 +57,30 @@ void LaunchAITool(HWND hwnd, const wchar_t* command, const wchar_t* toolName, co
 void ShowErrorBox(HWND hwnd, const wchar_t* message);
 BOOL ValidateWorkingDirectory(const wchar_t* path);
 wchar_t* ParseCommandLine(LPSTR lpCmdLine);
+BOOL IsToolAvailable(const wchar_t* command);
+void InitializeToolDetection();
+LayoutInfo CalculateLayout(int toolCount);
+
+// 终端配置相关函数
+BOOL LoadTerminalConfig(wchar_t* terminalPath, DWORD pathSize, wchar_t* terminalName, DWORD nameSize);
+TerminalParams GetTerminalParams(const wchar_t* terminalPath);
+BOOL ValidateTerminal(const wchar_t* terminalPath);
+void LaunchWithTerminal(const wchar_t* terminalPath, const wchar_t* command, const wchar_t* workingDir);
+void LaunchWithDefaultTerminal(const wchar_t* command, const wchar_t* workingDir);
 
 // 全局变量，用于键盘快捷键处理和工作目录存储
 HWND g_hwnd = NULL;
 wchar_t g_workingDir[MAX_PATH_LENGTH] = L"";
+
+// 工具信息数组
+ToolInfo g_tools[MAX_TOOLS] = {
+    {L"Claude", L"claude --dangerously-skip-permissions", 0, FALSE, ID_CLAUDE_BUTTON},
+    {L"Qwen", L"qwen -y", 0, FALSE, ID_QWEN_BUTTON},
+    {L"Codex", L"codex.cmd", 0, FALSE, ID_CODEX_BUTTON}
+};
+
+// 全局可用工具数量
+int g_availableToolCount = 0;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     // 初始化通用控件
@@ -54,6 +102,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         free(cmdLineWorkingDir);
     }
 
+    // 初始化AI工具检测
+    InitializeToolDetection();
+
+    // 计算动态布局
+    LayoutInfo layout = CalculateLayout(g_availableToolCount);
+
     // 注册窗口类
     static const wchar_t className[] = L"AILauncher";
 
@@ -71,50 +125,61 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return 1;
     }
 
-    // 计算窗口居中位置
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    int windowX = (screenWidth - WINDOW_WIDTH) / 2;
-    int windowY = (screenHeight - WINDOW_HEIGHT) / 2;
+    // 主窗口循环，支持重新创建窗口
+    while (true) {
+        // 计算动态布局（在重新创建时可能已更新）
+        LayoutInfo layout = CalculateLayout(g_availableToolCount);
 
-    // 创建窗口 - 使用宽字符
-    g_hwnd = CreateWindowExW(
-        0,
-        className,
-        L"AI启动器",
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        windowX, windowY, WINDOW_WIDTH, WINDOW_HEIGHT,
-        NULL, NULL, hInstance, NULL
-    );
+        // 计算窗口居中位置
+        int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+        int windowX = (screenWidth - layout.windowWidth) / 2;
+        int windowY = (screenHeight - layout.windowHeight) / 2;
 
-    if (!g_hwnd) {
-        MessageBoxW(NULL, L"创建窗口失败!", L"错误", MB_OK | MB_ICONERROR);
-        return 1;
-    }
+        // 如果窗口不存在，重新创建
+        if (g_hwnd == NULL) {
+            g_hwnd = CreateWindowExW(
+                0,
+                className,
+                L"AI启动器",
+                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                windowX, windowY, layout.windowWidth, layout.windowHeight,
+                NULL, NULL, hInstance, NULL
+            );
 
-    ShowWindow(g_hwnd, nCmdShow);
-    UpdateWindow(g_hwnd);
-
-    // 消息循环 - 使用低级键盘钩子来捕获全局按键
-    MSG msg = {};
-    while (GetMessage(&msg, NULL, 0, 0)) {
-        // 检查快捷键
-        if (msg.message == WM_KEYDOWN || msg.message == WM_CHAR) {
-            switch (msg.wParam) {
-                case '1':
-                    LaunchAITool(g_hwnd, L"claude --dangerously-skip-permissions", L"Claude", g_workingDir);
-                    continue;
-                case '2':
-                    LaunchAITool(g_hwnd, L"qwen -y", L"Qwen", g_workingDir);
-                    continue;
-                case '3':
-                    LaunchAITool(g_hwnd, L"codex.cmd", L"Codex", g_workingDir);
-                    continue;
+            if (!g_hwnd) {
+                MessageBoxW(NULL, L"创建窗口失败!", L"错误", MB_OK | MB_ICONERROR);
+                return 1;
             }
         }
 
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+        ShowWindow(g_hwnd, nCmdShow);
+        UpdateWindow(g_hwnd);
+
+        // 消息循环
+        MSG msg = {};
+        while (GetMessage(&msg, NULL, 0, 0) && g_hwnd != NULL) {
+            // 检查快捷键
+            if (msg.message == WM_KEYDOWN || msg.message == WM_CHAR) {
+                for (int i = 0; i < MAX_TOOLS; i++) {
+                    if (msg.wParam == g_tools[i].shortcutKey && g_tools[i].isAvailable) {
+                        LaunchAITool(g_hwnd, g_tools[i].command, g_tools[i].name, g_workingDir);
+                        continue;
+                    }
+                }
+            }
+
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+
+            // 如果窗口被销毁（重新检测），退出内层循环
+            if (g_hwnd == NULL) break;
+        }
+
+        // 如果窗口被正常关闭，退出程序
+        if (g_hwnd == NULL) {
+            break;
+        }
     }
 
     return 0;
@@ -124,49 +189,79 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     switch (uMsg) {
         case WM_CREATE:
         {
+            // 计算动态布局
+            LayoutInfo layout = CalculateLayout(g_availableToolCount);
+
             // 计算按钮水平居中位置
             RECT rect;
             GetClientRect(hwnd, &rect);
             int buttonX = (rect.right - BUTTON_WIDTH) / 2;
 
-            // 创建Claude按钮
-            HWND hClaudeButton = CreateWindowW(
-                L"BUTTON",
-                L"Claude (1)",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-                buttonX, START_Y_POS, BUTTON_WIDTH, BUTTON_HEIGHT,
-                hwnd,
-                (HMENU)ID_CLAUDE_BUTTON,
-                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
-                NULL
-            );
+            HWND firstButton = NULL;
 
-            // 创建Qwen按钮
-            HWND hQwenButton = CreateWindowW(
-                L"BUTTON",
-                L"Qwen (2)",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-                buttonX, START_Y_POS + BUTTON_HEIGHT + BUTTON_SPACING, BUTTON_WIDTH, BUTTON_HEIGHT,
-                hwnd,
-                (HMENU)ID_QWEN_BUTTON,
-                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
-                NULL
-            );
+            if (g_availableToolCount == 0) {
+                // 创建提示标签
+                CreateWindowW(
+                    L"STATIC",
+                    L"未检测到可用的AI工具\n\n请确保已安装以下工具之一：\n• Claude CLI\n• Qwen CLI\n• Codex CLI\n\n点击重新检测按钮重试",
+                    WS_CHILD | WS_VISIBLE | SS_CENTER,
+                    20, layout.buttonStartY, rect.right - 40, 120,
+                    hwnd,
+                    NULL,
+                    (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                    NULL
+                );
 
-            // 创建Codex按钮
-            HWND hCodexButton = CreateWindowW(
-                L"BUTTON",
-                L"Codex (3)",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-                buttonX, START_Y_POS + 2 * (BUTTON_HEIGHT + BUTTON_SPACING), BUTTON_WIDTH, BUTTON_HEIGHT,
-                hwnd,
-                (HMENU)ID_CODEX_BUTTON,
-                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
-                NULL
-            );
+                // 创建重新检测按钮
+                CreateWindowW(
+                    L"BUTTON",
+                    L"重新检测",
+                    WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+                    buttonX, layout.buttonStartY + 130, BUTTON_WIDTH, BUTTON_HEIGHT,
+                    hwnd,
+                    (HMENU)1004, // 重新检测按钮ID
+                    (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                    NULL
+                );
+            } else {
+                // 为每个可用的工具创建按钮
+                for (int i = 0; i < MAX_TOOLS; i++) {
+                    if (g_tools[i].isAvailable) {
+                        // 创建按钮文本
+                        wchar_t buttonText[MAX_PATH];
+                        wsprintfW(buttonText, L"%s (%c)", g_tools[i].name, (wchar_t)g_tools[i].shortcutKey);
+
+                        // 计算按钮Y坐标
+                        int toolIndex = 0;
+                        for (int j = 0; j < i; j++) {
+                            if (g_tools[j].isAvailable) toolIndex++;
+                        }
+                        int buttonY = layout.buttonStartY + toolIndex * (BUTTON_HEIGHT + layout.buttonSpacing);
+
+                        // 创建按钮
+                        HWND hButton = CreateWindowW(
+                            L"BUTTON",
+                            buttonText,
+                            WS_TABSTOP | WS_VISIBLE | WS_CHILD | (toolIndex == 0 ? BS_DEFPUSHBUTTON : BS_PUSHBUTTON),
+                            buttonX, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT,
+                            hwnd,
+                            (HMENU)g_tools[i].buttonId,
+                            (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                            NULL
+                        );
+
+                        // 保存第一个按钮用于设置焦点
+                        if (firstButton == NULL) {
+                            firstButton = hButton;
+                        }
+                    }
+                }
+            }
 
             // 设置默认按钮焦点
-            SetFocus(hClaudeButton);
+            if (firstButton != NULL) {
+                SetFocus(firstButton);
+            }
             break;
         }
 
@@ -174,18 +269,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         {
             int wmId = LOWORD(wParam);
 
-            switch (wmId) {
-                case ID_CLAUDE_BUTTON:
-                    LaunchAITool(hwnd, L"claude --dangerously-skip-permissions", L"Claude", g_workingDir);
-                    break;
+            // 处理重新检测按钮
+            if (wmId == 1004) {
+                InitializeToolDetection();
+                // 重新创建窗口
+                DestroyWindow(hwnd);
+                g_hwnd = NULL;
+                return 0;
+            }
 
-                case ID_QWEN_BUTTON:
-                    LaunchAITool(hwnd, L"qwen -y", L"Qwen", g_workingDir);
+            // 处理AI工具按钮点击
+            for (int i = 0; i < MAX_TOOLS; i++) {
+                if (wmId == g_tools[i].buttonId && g_tools[i].isAvailable) {
+                    LaunchAITool(hwnd, g_tools[i].command, g_tools[i].name, g_workingDir);
                     break;
-
-                case ID_CODEX_BUTTON:
-                    LaunchAITool(hwnd, L"codex", L"Codex", g_workingDir);
-                    break;
+                }
             }
             break;
         }
@@ -193,18 +291,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         case WM_CHAR:
         {
             // 处理字符消息作为备选方案
-            switch (wParam) {
-                case '1':
-                    LaunchAITool(hwnd, L"claude --dangerously-skip-permissions", L"Claude", g_workingDir);
+            for (int i = 0; i < MAX_TOOLS; i++) {
+                if (wParam == g_tools[i].shortcutKey && g_tools[i].isAvailable) {
+                    LaunchAITool(hwnd, g_tools[i].command, g_tools[i].name, g_workingDir);
                     break;
-
-                case '2':
-                    LaunchAITool(hwnd, L"qwen -y", L"Qwen", g_workingDir);
-                    break;
-
-                case '3':
-                    LaunchAITool(hwnd, L"codex", L"Codex", g_workingDir);
-                    break;
+                }
             }
             break;
         }
@@ -218,6 +309,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         }
 
         case WM_DESTROY:
+            // 清除全局窗口句柄，允许重新创建窗口
+            if (g_hwnd == hwnd) {
+                g_hwnd = NULL;
+            }
             PostQuitMessage(0);
             break;
 
@@ -228,34 +323,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 }
 
 void LaunchAITool(HWND hwnd, const wchar_t* command, const wchar_t* toolName, const wchar_t* workingDir) {
-    // 构建完整的cmd命令
-    wchar_t fullCommand[512];
-    wcscpy(fullCommand, L"/k ");
-    wcscat(fullCommand, command);
+    // 读取用户配置的终端程序
+    wchar_t terminalPath[MAX_PATH];
+    wchar_t terminalName[256];
 
-    // 确定工作目录
-    const wchar_t* launchDir = (workingDir[0] != L'\0') ? workingDir : NULL;
+    if (LoadTerminalConfig(terminalPath, MAX_PATH, terminalName, 256)) {
+        // 验证终端程序是否仍然可用
+        if (ValidateTerminal(terminalPath)) {
+            // 使用用户配置的终端
+            LaunchWithTerminal(terminalPath, command, workingDir);
+        } else {
+            // 终端不可用，显示警告并回退到默认终端
+            wchar_t warningMsg[512];
+            wcscpy(warningMsg, L"配置的终端程序不可用:\n");
+            wcscat(warningMsg, terminalPath);
+            wcscat(warningMsg, L"\n\n将使用默认的cmd.exe启动AI工具");
+            MessageBoxW(hwnd, warningMsg, L"警告", MB_OK | MB_ICONWARNING);
 
-    // 尝试启动AI工具
-    HINSTANCE result = ShellExecuteW(
-        NULL,
-        L"open",
-        L"cmd.exe",
-        fullCommand,
-        launchDir,  // 设置工作目录
-        SW_SHOWNORMAL
-    );
-
-    // 检查启动结果
-    if ((int)result <= 32) {
-        // 启动失败，显示错误消息
-        wchar_t errorMsg[512];
-        wcscpy(errorMsg, toolName);
-        wcscat(errorMsg, L"应用未安装或启动失败");
-        ShowErrorBox(hwnd, errorMsg);
+            LaunchWithDefaultTerminal(command, workingDir);
+        }
     } else {
-        // 启动成功，退出主窗口
-        DestroyWindow(hwnd);
+        // 回退到默认cmd.exe
+        LaunchWithDefaultTerminal(command, workingDir);
     }
 }
 
@@ -337,4 +426,299 @@ BOOL ValidateWorkingDirectory(const wchar_t* path) {
     DWORD attributes = GetFileAttributesW(path);
     return (attributes != INVALID_FILE_ATTRIBUTES &&
             (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0);
+}
+
+// 检测AI工具是否可用
+BOOL IsToolAvailable(const wchar_t* command) {
+    wchar_t buffer[MAX_PATH];
+    wcscpy(buffer, L"where ");
+    wcscat(buffer, command);
+
+    // 使用CreateProcess静默执行where命令
+    STARTUPINFOW si = {0};
+    PROCESS_INFORMATION pi = {0};
+    si.cb = sizeof(si);
+    si.dwFlags |= STARTF_USESTDHANDLES;
+    si.hStdInput = NULL;
+    si.hStdOutput = NULL;
+    si.hStdError = NULL;
+
+    // 创建静默进程
+    BOOL success = CreateProcessW(
+        NULL,                           // 应用程序名称
+        buffer,                         // 命令行
+        NULL,                           // 进程安全属性
+        NULL,                           // 线程安全属性
+        FALSE,                          // 句柄继承
+        CREATE_NO_WINDOW,               // 创建标志 - 不显示窗口
+        NULL,                           // 环境
+        NULL,                           // 当前目录
+        &si,                            // 启动信息
+        &pi                             // 进程信息
+    );
+
+    if (success) {
+        // 等待进程完成
+        WaitForSingleObject(pi.hProcess, 5000); // 最多等待5秒
+
+        // 获取退出代码
+        DWORD exitCode;
+        GetExitCodeProcess(pi.hProcess, &exitCode);
+
+        // 清理进程和线程句柄
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+
+        // 如果退出代码为0，表示找到了命令
+        return (exitCode == 0);
+    }
+
+    return FALSE; // 创建进程失败，认为工具不可用
+}
+
+// 初始化AI工具检测
+void InitializeToolDetection() {
+    g_availableToolCount = 0;
+
+    // 检测每个AI工具
+    for (int i = 0; i < MAX_TOOLS; i++) {
+        // 提取命令部分（去除参数）
+        wchar_t tempCommand[MAX_PATH];
+        wcscpy(tempCommand, g_tools[i].command);
+
+        // 找到第一个空格，分离命令和参数
+        wchar_t* space = wcschr(tempCommand, L' ');
+        if (space) {
+            *space = L'\0';
+        }
+
+        // 检测工具可用性
+        g_tools[i].isAvailable = IsToolAvailable(tempCommand);
+
+        if (g_tools[i].isAvailable) {
+            // 分配快捷键
+            g_tools[i].shortcutKey = '1' + g_availableToolCount;
+            g_availableToolCount++;
+        }
+    }
+}
+
+// 计算动态布局信息
+LayoutInfo CalculateLayout(int toolCount) {
+    LayoutInfo layout;
+    layout.availableToolCount = toolCount;
+    layout.windowWidth = WINDOW_WIDTH; // 保持固定宽度
+    layout.buttonSpacing = BUTTON_SPACING;
+
+    if (toolCount == 0) {
+        // 无工具时的布局
+        layout.windowHeight = 200;
+        layout.buttonStartY = 80;
+    } else {
+        // 计算基础高度（标题区域 + 边距）
+        int baseHeight = 80;
+        // 计算按钮占用的总高度
+        int buttonsHeight = toolCount * BUTTON_HEIGHT + (toolCount - 1) * layout.buttonSpacing;
+        // 计算总窗口高度
+        layout.windowHeight = baseHeight + buttonsHeight + 40; // 底部边距
+
+        // 计算第一个按钮的Y坐标（垂直居中）
+        int availableHeight = layout.windowHeight - 120; // 减去顶部和底部边距
+        int totalButtonHeight = buttonsHeight;
+        layout.buttonStartY = 60 + (availableHeight - totalButtonHeight) / 2;
+    }
+
+    return layout;
+}
+
+// 读取终端配置
+BOOL LoadTerminalConfig(wchar_t* terminalPath, DWORD pathSize, wchar_t* terminalName, DWORD nameSize) {
+    HKEY hKey;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, TERMINAL_CONFIG_PATH, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD type, size = pathSize;
+        DWORD result = RegQueryValueExW(hKey, L"TerminalPath", NULL, &type, (LPBYTE)terminalPath, &size);
+
+        if (result == ERROR_SUCCESS && terminalPath[0] != L'\0') {
+            size = nameSize;
+            RegQueryValueExW(hKey, L"TerminalName", NULL, &type, (LPBYTE)terminalName, &size);
+            RegCloseKey(hKey);
+            return TRUE;
+        }
+        RegCloseKey(hKey);
+    }
+    return FALSE;
+}
+
+// 验证终端程序
+BOOL ValidateTerminal(const wchar_t* terminalPath) {
+    // 检查文件是否存在
+    DWORD attr = GetFileAttributesW(terminalPath);
+    if (attr == INVALID_FILE_ATTRIBUTES || (attr & FILE_ATTRIBUTE_DIRECTORY)) {
+        return FALSE;
+    }
+
+    // 检查文件扩展名
+    const wchar_t* extension = wcsrchr(terminalPath, L'.');
+    if (!extension || _wcsicmp(extension, L".exe") != 0) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+// 获取终端启动参数
+TerminalParams GetTerminalParams(const wchar_t* terminalPath) {
+    TerminalParams params;
+    wcscpy(params.exePath, terminalPath);
+    params.argCount = 0;
+
+    if (wcsstr(terminalPath, L"wt.exe") || wcsstr(terminalPath, L"WindowsTerminal.exe")) {
+        // Windows Terminal
+        wcscpy(params.args[0], L"new-tab");
+        wcscpy(params.args[1], L"--");
+        wcscpy(params.args[2], L"cmd.exe");
+        wcscpy(params.args[3], L"/k");
+        params.argCount = 4;
+    } else if (wcsstr(terminalPath, L"powershell.exe")) {
+        // PowerShell
+        wcscpy(params.args[0], L"-Command");
+        params.argCount = 1;
+    } else if (wcsstr(terminalPath, L"git-bash.exe")) {
+        // Git Bash
+        wcscpy(params.args[0], L"-l");
+        params.argCount = 1;
+    } else {
+        // 默认参数（cmd.exe和其他终端）
+        wcscpy(params.args[0], L"/k");
+        params.argCount = 1;
+    }
+
+    return params;
+}
+
+// 使用指定终端启动AI工具
+void LaunchWithTerminal(const wchar_t* terminalPath, const wchar_t* command, const wchar_t* workingDir) {
+    wchar_t fullCommand[2048] = L"";
+    wchar_t workingDirCommand[1024] = L"";
+
+    // 确定工作目录
+    const wchar_t* launchDir = (workingDir && workingDir[0] != L'\0') ? workingDir : NULL;
+
+    // 根据不同的终端类型构建命令
+    if (wcsstr(terminalPath, L"wt.exe") || wcsstr(terminalPath, L"WindowsTerminal.exe")) {
+        // Windows Terminal: 使用cmd.exe作为默认配置文件
+        wcscpy(fullCommand, L"");
+        if (launchDir) {
+            // 直接使用cmd的完整命令
+            wsprintfW(workingDirCommand, L"cmd /k \"cd /d \"%s\" && %s\"", workingDir, command);
+        } else {
+            wsprintfW(workingDirCommand, L"cmd /k \"%s\"", command);
+        }
+    } else if (wcsstr(terminalPath, L"powershell.exe")) {
+        // PowerShell: powershell.exe -Command "cd DIR; AI_TOOL_COMMAND"
+        wcscpy(fullCommand, L"-Command");
+        if (launchDir) {
+            wsprintfW(workingDirCommand, L"cd \"%s\"; %s", workingDir, command);
+        } else {
+            wcscpy(workingDirCommand, command);
+        }
+    } else if (wcsstr(terminalPath, L"git-bash.exe")) {
+        // Git Bash: git-bash.exe -l -c "cd DIR && AI_TOOL_COMMAND"
+        wcscpy(fullCommand, L"-l -c");
+        if (launchDir) {
+            // Git Bash使用Unix风格路径，需要转换Windows路径
+            wchar_t unixPath[MAX_PATH];
+            wcscpy(unixPath, workingDir);
+            // 将反斜杠转换为正斜杠
+            for (wchar_t* p = unixPath; *p; p++) {
+                if (*p == L'\\') *p = L'/';
+            }
+            wsprintfW(workingDirCommand, L"cd '%s' && %s", unixPath, command);
+        } else {
+            wcscpy(workingDirCommand, command);
+        }
+    } else {
+        // 默认终端 (cmd.exe): cmd.exe /k "cd /d DIR && AI_TOOL_COMMAND"
+        wcscpy(fullCommand, L"/k");
+        if (launchDir) {
+            wsprintfW(workingDirCommand, L"cd /d \"%s\" && %s", workingDir, command);
+        } else {
+            wcscpy(workingDirCommand, command);
+        }
+    }
+
+    // 启动终端
+    HINSTANCE result;
+    if (wcsstr(terminalPath, L"wt.exe") || wcsstr(terminalPath, L"WindowsTerminal.exe")) {
+        // Windows Terminal: 直接传递cmd命令
+        result = ShellExecuteW(NULL, L"open", terminalPath, workingDirCommand, launchDir, SW_SHOWNORMAL);
+    } else if (wcsstr(terminalPath, L"powershell.exe")) {
+        // PowerShell: 直接将命令作为参数传递
+        wchar_t finalCommand[3072];
+        wsprintfW(finalCommand, L"%s \"%s\"", fullCommand, workingDirCommand);
+        result = ShellExecuteW(NULL, L"open", terminalPath, finalCommand, launchDir, SW_SHOWNORMAL);
+    } else if (wcsstr(terminalPath, L"git-bash.exe")) {
+        // Git Bash: 直接将命令作为参数传递
+        wchar_t finalCommand[3072];
+        wsprintfW(finalCommand, L"%s \"%s\"", fullCommand, workingDirCommand);
+        result = ShellExecuteW(NULL, L"open", terminalPath, finalCommand, launchDir, SW_SHOWNORMAL);
+    } else {
+        // cmd.exe
+        wchar_t finalCommand[3072];
+        wsprintfW(finalCommand, L"%s \"%s\"", fullCommand, workingDirCommand);
+        result = ShellExecuteW(NULL, L"open", terminalPath, finalCommand, launchDir, SW_SHOWNORMAL);
+    }
+
+    // 检查启动结果
+    if ((int)result <= 32) {
+        // 启动失败，回退到默认终端
+        wchar_t errorMsg[512];
+        wcscpy(errorMsg, L"无法启动配置的终端程序:\n");
+        wcscat(errorMsg, terminalPath);
+        wcscat(errorMsg, L"\n\n将使用默认终端重试");
+        MessageBoxW(NULL, errorMsg, L"错误", MB_OK | MB_ICONERROR);
+
+        LaunchWithDefaultTerminal(command, workingDir);
+    } else {
+        // 启动成功，退出主窗口
+        if (g_hwnd) {
+            DestroyWindow(g_hwnd);
+        }
+    }
+}
+
+// 使用默认终端启动AI工具
+void LaunchWithDefaultTerminal(const wchar_t* command, const wchar_t* workingDir) {
+    wchar_t fullCommand[1024];
+
+    // 构建完整的cmd命令，包含工作目录切换
+    if (workingDir && workingDir[0] != L'\0') {
+        wsprintfW(fullCommand, L"/k \"cd /d \"%s\" && %s\"", workingDir, command);
+    } else {
+        wsprintfW(fullCommand, L"/k %s", command);
+    }
+
+    // 确定工作目录
+    const wchar_t* launchDir = (workingDir && workingDir[0] != L'\0') ? workingDir : NULL;
+
+    // 启动默认cmd.exe
+    HINSTANCE result = ShellExecuteW(
+        NULL,
+        L"open",
+        L"cmd.exe",
+        fullCommand,
+        launchDir,
+        SW_SHOWNORMAL
+    );
+
+    // 检查启动结果
+    if ((int)result <= 32) {
+        // 启动失败，显示错误消息
+        MessageBoxW(NULL, L"无法启动终端，请检查系统设置", L"错误", MB_OK | MB_ICONERROR);
+    } else {
+        // 启动成功，退出主窗口
+        if (g_hwnd) {
+            DestroyWindow(g_hwnd);
+        }
+    }
 }

@@ -1,9 +1,15 @@
 #include <windows.h>
 
-// 应用程序图标资源
+// 图标资源定义
+// ID 100: registry_manager.exe 应用程序图标
+// ID 1: ai_launcher.exe 应用程序图标
+// ID 2: 右键菜单图标
+
+100 ICON "app.ico"
 1 ICON "app.ico"
 2 ICON "logo.ico"
 
-// 也可以使用名称定义
-APP_ICON ICON "app.ico"
-LOGO_ICON ICON "logo.ico"
+// 资源名称定义
+REGISTRY_ICON ICON "app.ico"
+LAUNCHER_ICON ICON "app.ico"
+MENU_ICON ICON "logo.ico"

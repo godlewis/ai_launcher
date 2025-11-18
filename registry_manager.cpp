@@ -1,20 +1,28 @@
 #include <windows.h>
-#include <stdio.h>
 #include <commctrl.h>
 #include <shlobj.h>
 #include <shlwapi.h>
+#include <windowsx.h>
 
 // 按钮ID定义
 #define ID_REGISTER_BUTTON 1001
 #define ID_UNREGISTER_BUTTON 1002
 #define ID_STATUS_LABEL 1003
+#define ID_TERMINAL_COMBO 1004
+#define ID_TERMINAL_PATH_LABEL 1005
+#define ID_BROWSE_BUTTON 1006
+#define ID_TERMINAL_GROUP 1007
 
 // 窗口尺寸常量
-#define WINDOW_WIDTH 400
-#define WINDOW_HEIGHT 220
+#define WINDOW_WIDTH 450
+#define WINDOW_HEIGHT 280
 #define BUTTON_WIDTH 120
 #define BUTTON_HEIGHT 35
 #define BUTTON_SPACING 20
+
+// 终端配置注册表路径
+const wchar_t* TERMINAL_CONFIG_PATH = L"Software\\AILauncher";
+
 
 // 注册表路径 - 支持Directory和Directory\Background
 const wchar_t* REGISTRY_PATH_DIR = L"Directory\\shell\\AITools";
@@ -27,6 +35,11 @@ const wchar_t* COMMAND_PATH_BACKGROUND = L"Directory\\Background\\shell\\AITools
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "shlwapi.lib")
 
+// 全局变量 - 简化后不再需要终端检测
+// TerminalInfo g_terminals[10];
+// int g_terminalCount = 0;
+// BOOL g_detectionCompleted = FALSE;
+
 // 函数声明
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void UpdateUIState(HWND hwnd);
@@ -34,6 +47,12 @@ void ShowMessage(HWND hwnd, const wchar_t* message, BOOL isError);
 BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath);
 BOOL UnregisterContextMenu(HWND hwnd);
 BOOL FindAILauncherPath(wchar_t* path, DWORD pathSize);
+
+// 终端配置相关函数
+BOOL ValidateTerminal(const wchar_t* terminalPath);
+BOOL SaveTerminalConfig(const wchar_t* terminalPath, const wchar_t* terminalName);
+BOOL LoadTerminalConfig(wchar_t* terminalPath, DWORD pathSize, wchar_t* terminalName, DWORD nameSize);
+BOOL BrowseForTerminal(HWND hwnd, wchar_t* selectedPath, DWORD pathSize);
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     // 初始化通用控件
@@ -93,42 +112,35 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     switch (uMsg) {
         case WM_CREATE:
         {
-            // 计算控件位置
-            int centerX = (WINDOW_WIDTH - BUTTON_WIDTH) / 2;
-            int centerY = WINDOW_HEIGHT / 2;
-
             // 创建状态标签
             HWND hStatusLabel = CreateWindowW(
                 L"STATIC",
                 L"正在检测状态...",
                 WS_CHILD | WS_VISIBLE | SS_CENTER,
-                50, 30, WINDOW_WIDTH - 100, 30,
+                50, 15, WINDOW_WIDTH - 100, 25,
                 hwnd,
                 (HMENU)ID_STATUS_LABEL,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL
             );
 
-            // 创建注册按钮
+            // 创建注册和卸载按钮
             HWND hRegisterButton = CreateWindowW(
                 L"BUTTON",
                 L"注册右键菜单",
                 WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-                centerX - BUTTON_WIDTH - 10, centerY - BUTTON_HEIGHT/2 - 10,
-                BUTTON_WIDTH, BUTTON_HEIGHT,
+                50, 50, BUTTON_WIDTH - 10, BUTTON_HEIGHT,
                 hwnd,
                 (HMENU)ID_REGISTER_BUTTON,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL
             );
 
-            // 创建卸载按钮
             HWND hUnregisterButton = CreateWindowW(
                 L"BUTTON",
                 L"卸载右键菜单",
                 WS_TABSTOP | WS_VISIBLE | WS_CHILD,
-                centerX + 10, centerY - BUTTON_HEIGHT/2 - 10,
-                BUTTON_WIDTH, BUTTON_HEIGHT,
+                180, 50, BUTTON_WIDTH - 10, BUTTON_HEIGHT,
                 hwnd,
                 (HMENU)ID_UNREGISTER_BUTTON,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
@@ -140,13 +152,68 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 L"STATIC",
                 L"支持文件夹和目录背景右键菜单",
                 WS_CHILD | WS_VISIBLE | SS_CENTER,
-                50, centerY + 20,
-                WINDOW_WIDTH - 100, 20,
+                50, 95, WINDOW_WIDTH - 100, 20,
                 hwnd,
                 NULL,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL
             );
+
+            // 创建终端选择分组框
+            HWND hTerminalGroup = CreateWindowW(
+                L"BUTTON",
+                L"终端程序选择",
+                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                30, 130, WINDOW_WIDTH - 60, 100,
+                hwnd,
+                (HMENU)ID_TERMINAL_GROUP,
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL
+            );
+
+            // 创建终端选择文本框标签
+            CreateWindowW(
+                L"STATIC",
+                L"终端程序路径:",
+                WS_CHILD | WS_VISIBLE,
+                50, 155, 120, 20,
+                hwnd,
+                NULL,
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL
+            );
+
+            // 创建终端路径文本框
+            HWND hTerminalEdit = CreateWindowW(
+                L"EDIT",
+                L"",
+                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
+                50, 180, 290, 25,
+                hwnd,
+                (HMENU)ID_TERMINAL_COMBO, // 重用ID，改为文本框
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL
+            );
+
+            // 创建浏览按钮
+            HWND hBrowseButton = CreateWindowW(
+                L"BUTTON",
+                L"浏览...",
+                WS_TABSTOP | WS_VISIBLE | WS_CHILD,
+                345, 180, 60, 25,
+                hwnd,
+                (HMENU)ID_BROWSE_BUTTON,
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL
+            );
+
+          // 加载当前终端配置
+            wchar_t currentPath[MAX_PATH] = L"";
+            wchar_t currentName[256] = L"";
+            LoadTerminalConfig(currentPath, MAX_PATH, currentName, 256);
+
+            // 设置文本框内容
+            SetWindowTextW(hTerminalEdit, currentPath);
 
             // 更新UI状态
             UpdateUIState(hwnd);
@@ -156,19 +223,49 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         case WM_COMMAND:
         {
             int wmId = LOWORD(wParam);
+            HWND hControl = (HWND)lParam;
 
             switch (wmId) {
                 case ID_REGISTER_BUTTON:
                 {
-                    // 查找ai_launcher.exe路径
-                    wchar_t aiLauncherPath[MAX_PATH];
-                    if (FindAILauncherPath(aiLauncherPath, MAX_PATH)) {
-                        if (RegisterContextMenu(hwnd, aiLauncherPath)) {
-                            ShowMessage(hwnd, L"右键菜单注册成功！", FALSE);
-                            UpdateUIState(hwnd);
+                    // 获取文本框中的终端路径
+                    HWND hEdit = GetDlgItem(hwnd, ID_TERMINAL_COMBO);
+                    wchar_t terminalPath[MAX_PATH];
+                    GetWindowTextW(hEdit, terminalPath, MAX_PATH);
+
+                    // 如果路径为空，使用默认cmd.exe
+                    if (wcslen(terminalPath) == 0) {
+                        wcscpy(terminalPath, L"C:\\Windows\\System32\\cmd.exe");
+                    }
+
+                    // 验证终端路径
+                    if (ValidateTerminal(terminalPath)) {
+                        // 提取终端名称
+                        wchar_t terminalName[256];
+                        wchar_t* fileName = wcsrchr(terminalPath, L'\\');
+                        if (fileName) {
+                            fileName++;
+                            wcscpy(terminalName, fileName);
+                        } else {
+                            wcscpy(terminalName, terminalPath);
+                        }
+
+                        if (SaveTerminalConfig(terminalPath, terminalName)) {
+                            // 查找ai_launcher.exe路径
+                            wchar_t aiLauncherPath[MAX_PATH];
+                            if (FindAILauncherPath(aiLauncherPath, MAX_PATH)) {
+                                if (RegisterContextMenu(hwnd, aiLauncherPath)) {
+                                    ShowMessage(hwnd, L"右键菜单注册成功！", FALSE);
+                                    UpdateUIState(hwnd);
+                                }
+                            } else {
+                                MessageBoxW(hwnd, L"未找到ai_launcher.exe文件", L"错误", MB_OK | MB_ICONERROR);
+                            }
+                        } else {
+                            MessageBoxW(hwnd, L"无法保存终端配置", L"错误", MB_OK | MB_ICONERROR);
                         }
                     } else {
-                        MessageBoxW(hwnd, L"未找到ai_launcher.exe文件", L"错误", MB_OK | MB_ICONERROR);
+                        MessageBoxW(hwnd, L"指定的终端程序路径无效", L"错误", MB_OK | MB_ICONERROR);
                     }
                     break;
                 }
@@ -178,6 +275,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     if (UnregisterContextMenu(hwnd)) {
                         ShowMessage(hwnd, L"右键菜单卸载成功！", FALSE);
                         UpdateUIState(hwnd);
+                    }
+                    break;
+                }
+
+                case ID_BROWSE_BUTTON:
+                {
+                    wchar_t selectedPath[MAX_PATH] = L"";
+                    if (BrowseForTerminal(hwnd, selectedPath, MAX_PATH)) {
+                        // 验证选择的终端
+                        if (ValidateTerminal(selectedPath)) {
+                            // 直接设置到文本框
+                            HWND hEdit = GetDlgItem(hwnd, ID_TERMINAL_COMBO);
+                            SetWindowTextW(hEdit, selectedPath);
+                        } else {
+                            MessageBoxW(hwnd, L"选择的文件不是有效的终端程序", L"错误", MB_OK | MB_ICONERROR);
+                        }
                     }
                     break;
                 }
@@ -254,8 +367,16 @@ BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath) {
             success = FALSE;
         }
 
-        // 使用程序自身作为图标源
+        // 使用程序自身资源中的图标
         GetModuleFileNameW(NULL, iconValue, MAX_PATH);
+        if (iconValue[0] != L'\0') {
+            // 指向资源中的图标，ID为2 (logo.ico)
+            wchar_t* lastBackslash = wcsrchr(iconValue, L'\\');
+            if (lastBackslash) {
+                *(lastBackslash + 1) = L'\0';
+                wcscat(iconValue, L",-2"); // 使用资源ID 2
+            }
+        }
         if (RegSetValueExW(hKey, L"Icon", 0, REG_SZ, (const BYTE*)iconValue,
                           (wcslen(iconValue) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
             ShowMessage(hwnd, L"无法设置文件夹菜单图标", TRUE);
@@ -297,8 +418,16 @@ BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath) {
             success = FALSE;
         }
 
-        // 使用程序自身作为图标源
+        // 使用程序自身资源中的图标
         GetModuleFileNameW(NULL, iconValue, MAX_PATH);
+        if (iconValue[0] != L'\0') {
+            // 指向资源中的图标，ID为2 (logo.ico)
+            wchar_t* lastBackslash = wcsrchr(iconValue, L'\\');
+            if (lastBackslash) {
+                *(lastBackslash + 1) = L'\0';
+                wcscat(iconValue, L",-2"); // 使用资源ID 2
+            }
+        }
         if (RegSetValueExW(hKey, L"Icon", 0, REG_SZ, (const BYTE*)iconValue,
                           (wcslen(iconValue) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
             ShowMessage(hwnd, L"无法设置背景菜单图标", TRUE);
@@ -389,4 +518,65 @@ void UpdateUIState(HWND hwnd) {
 void ShowMessage(HWND hwnd, const wchar_t* message, BOOL isError) {
     MessageBoxW(hwnd, message, isError ? L"错误" : L"信息",
                 MB_OK | (isError ? MB_ICONERROR : MB_ICONINFORMATION));
+}
+
+
+// 验证终端程序
+BOOL ValidateTerminal(const wchar_t* terminalPath) {
+    // 检查文件是否存在
+    DWORD attr = GetFileAttributesW(terminalPath);
+    if (attr == INVALID_FILE_ATTRIBUTES || (attr & FILE_ATTRIBUTE_DIRECTORY)) {
+        return FALSE;
+    }
+
+    // 检查文件扩展名
+    const wchar_t* extension = wcsrchr(terminalPath, L'.');
+    if (!extension || _wcsicmp(extension, L".exe") != 0) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+// 保存终端配置
+BOOL SaveTerminalConfig(const wchar_t* terminalPath, const wchar_t* terminalName) {
+    HKEY hKey;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, TERMINAL_CONFIG_PATH, 0, NULL,
+                       REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExW(hKey, L"TerminalPath", 0, REG_SZ,
+                        (const BYTE*)terminalPath, (wcslen(terminalPath) + 1) * sizeof(wchar_t));
+        RegSetValueExW(hKey, L"TerminalName", 0, REG_SZ,
+                        (const BYTE*)terminalName, (wcslen(terminalName) + 1) * sizeof(wchar_t));
+        RegCloseKey(hKey);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+// 读取终端配置
+BOOL LoadTerminalConfig(wchar_t* terminalPath, DWORD pathSize, wchar_t* terminalName, DWORD nameSize) {
+    HKEY hKey;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, TERMINAL_CONFIG_PATH, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD type, size = pathSize;
+        RegQueryValueExW(hKey, L"TerminalPath", NULL, &type, (LPBYTE)terminalPath, &size);
+
+        size = nameSize;
+        RegQueryValueExW(hKey, L"TerminalName", NULL, &type, (LPBYTE)terminalName, &size);
+        RegCloseKey(hKey);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+// 浏览终端程序
+BOOL BrowseForTerminal(HWND hwnd, wchar_t* selectedPath, DWORD pathSize) {
+    OPENFILENAMEW ofn = {0};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFilter = L"可执行文件\0*.exe\0所有文件\0*.*\0";
+    ofn.lpstrFile = selectedPath;
+    ofn.nMaxFile = pathSize;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+
+    return GetOpenFileNameW(&ofn);
 }
