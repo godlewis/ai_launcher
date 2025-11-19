@@ -9,7 +9,6 @@ on:
 # 设置GitHub Token权限
 permissions:
   contents: write
-  releases: write
 
 jobs:
   build:
