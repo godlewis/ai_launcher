@@ -51,7 +51,7 @@ jobs:
         # Build ai_launcher.exe (without resources for simplicity)
         Write-Host "Building ai_launcher.exe..."
         try {
-          cl ..\ai_launcher.cpp /Fe:ai_launcher.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib advapi32.lib /SUBSYSTEM:WINDOWS
+          cl ..\ai_launcher.cpp /Fe:ai_launcher.exe /utf-8 /link user32.lib gdi32.lib shell32.lib comctl32.lib advapi32.lib /SUBSYSTEM:WINDOWS
 
           if (Test-Path "ai_launcher.exe") {
             Write-Host "✅ ai_launcher.exe built successfully"
@@ -67,7 +67,7 @@ jobs:
         # Build registry_manager.exe (without resources for simplicity)
         Write-Host "Building registry_manager.exe..."
         try {
-          cl ..\registry_manager.cpp /Fe:registry_manager.exe /link user32.lib gdi32.lib shell32.lib comctl32.lib advapi32.lib shlwapi.lib comdlg32.lib /SUBSYSTEM:WINDOWS
+          cl ..\registry_manager.cpp /Fe:registry_manager.exe /utf-8 /link user32.lib gdi32.lib shell32.lib comctl32.lib advapi32.lib shlwapi.lib comdlg32.lib /SUBSYSTEM:WINDOWS
 
           if (Test-Path "registry_manager.exe") {
             Write-Host "✅ registry_manager.exe built successfully"
