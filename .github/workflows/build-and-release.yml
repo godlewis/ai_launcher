@@ -6,6 +6,11 @@ on:
       - 'v*.*.*'
   workflow_dispatch:
 
+# 设置GitHub Token权限
+permissions:
+  contents: write
+  releases: write
+
 jobs:
   build:
     runs-on: windows-latest
