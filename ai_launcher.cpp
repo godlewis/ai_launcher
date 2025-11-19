@@ -118,7 +118,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     // 使用系统图标，看起来更像AI应用
-    wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(1));
+    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
 
     if (!RegisterClassW(&wc)) {
         MessageBoxW(NULL, L"注册窗口类失败!", L"错误", MB_OK | MB_ICONERROR);

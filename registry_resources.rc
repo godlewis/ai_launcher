@@ -1,4 +1,0 @@
-#include <windows.h>
-
-// 注册表管理器图标资源
-100 ICON "logo.ico"

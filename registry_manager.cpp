@@ -14,7 +14,7 @@
 
 // 窗口尺寸常量
 #define WINDOW_WIDTH 450
-#define WINDOW_HEIGHT 280
+#define WINDOW_HEIGHT 240
 #define BUTTON_WIDTH 120
 #define BUTTON_HEIGHT 35
 #define BUTTON_SPACING 20
@@ -66,7 +66,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wc.lpszClassName = className;
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(100));
+    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
 
     if (!RegisterClassW(&wc)) {
         MessageBoxW(NULL, L"注册窗口类失败!", L"错误", MB_OK | MB_ICONERROR);
@@ -146,12 +146,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 NULL
             );
 
+            // 创建退出按钮
+            HWND hExitButton = CreateWindowW(
+                L"BUTTON",
+                L"退出",
+                WS_TABSTOP | WS_VISIBLE | WS_CHILD,
+                310, 50, 60, BUTTON_HEIGHT,
+                hwnd,
+                (HMENU)ID_EXIT_BUTTON,
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL
+            );
+
             // 创建说明标签
             HWND hInfoLabel = CreateWindowW(
                 L"STATIC",
                 L"支持文件夹和目录背景右键菜单",
                 WS_CHILD | WS_VISIBLE | SS_CENTER,
-                50, 95, WINDOW_WIDTH - 100, 20,
+                50, 85, WINDOW_WIDTH - 100, 20,
                 hwnd,
                 NULL,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
@@ -163,7 +175,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 L"BUTTON",
                 L"终端程序选择",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                30, 130, WINDOW_WIDTH - 60, 100,
+                30, 120, WINDOW_WIDTH - 60, 100,
                 hwnd,
                 (HMENU)ID_STATUS_LABEL,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
@@ -175,7 +187,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 L"STATIC",
                 L"终端程序路径:",
                 WS_CHILD | WS_VISIBLE,
-                50, 155, 120, 20,
+                50, 145, 120, 20,
                 hwnd,
                 NULL,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
@@ -187,7 +199,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 L"EDIT",
                 L"",
                 WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
-                50, 180, 290, 25,
+                50, 170, 290, 25,
                 hwnd,
                 (HMENU)ID_TERMINAL_EDIT,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
@@ -199,25 +211,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 L"BUTTON",
                 L"浏览...",
                 WS_TABSTOP | WS_VISIBLE | WS_CHILD,
-                345, 180, 60, 25,
+                345, 170, 60, 25,
                 hwnd,
                 (HMENU)ID_BROWSE_BUTTON,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL
             );
 
-            // 创建退出按钮 - 放在窗口底部右侧
-            HWND hExitButton = CreateWindowW(
-                L"BUTTON",
-                L"退出",
-                WS_TABSTOP | WS_VISIBLE | WS_CHILD,
-                WINDOW_WIDTH - 130, WINDOW_HEIGHT - 50, 80, 30,
-                hwnd,
-                (HMENU)ID_EXIT_BUTTON,
-                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
-                NULL
-            );
-
+    
           // 加载当前终端配置
             wchar_t currentPath[MAX_PATH] = L"";
             wchar_t currentName[256] = L"";
