@@ -11,8 +11,8 @@
 ## 🚀 功能特性
 
 ### 核心功能
-- 🤖 **多AI工具支持**：智能检测并启动Claude、Qwen、Codex等AI工具
-- ⌨️ **键盘快捷键**：动态分配数字键1、2、3快速启动
+- 🤖 **多AI工具支持**：智能检测并启动Claude、Qwen、Codex、OpenCode、Gemini、Crush等AI工具
+- ⌨️ **键盘快捷键**：动态分配数字键1、2、3、4、5、6快速启动
 - 📁 **工作目录支持**：支持命令行参数指定工作目录
 - 🌍 **环境变量继承**：完整继承用户环境变量和PATH配置
 - 🖱️ **右键菜单集成**：支持文件夹和文件夹背景右键菜单
@@ -40,7 +40,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| `ai_launcher.exe` | 主程序 - AI工具启动器 (37KB) |
+| `ai_launcher.exe` | 主程序 - AI工具启动器 (44KB) |
 | `registry_manager.exe` | 右键菜单管理器 (43KB) |
 | `ai_launcher.cpp` | 主程序源代码 |
 | `registry_manager.cpp` | 注册表管理器源代码 |
@@ -71,11 +71,17 @@
    - **Claude (1)** - 启动Claude CLI（带权限跳过）
    - **Qwen (2)** - 启动Qwen CLI（自动确认）
    - **Codex (3)** - 启动Codex CLI
+   - **OpenCode (4)** - 启动OpenCode CLI
+   - **Gemini (5)** - 启动Gemini CLI（带--yolo参数）
+   - **Crush (6)** - 启动Crush CLI
 
 #### 键盘快捷键
 - **按 1** - 启动Claude
 - **按 2** - 启动Qwen
 - **按 3** - 启动Codex
+- **按 4** - 启动OpenCode
+- **按 5** - 启动Gemini
+- **按 6** - 启动Crush
 - **按 ESC** - 退出程序
 
 ### 3. 命令行参数（工作目录）
@@ -134,6 +140,9 @@ ai_launcher.exe "..\workspace"
 - **Claude**: `claude --dangerously-skip-permissions`
 - **Qwen**: `qwen -y`
 - **Codex**: `codex.cmd`
+- **OpenCode**: `opencode`
+- **Gemini**: `gemini --yolo`
+- **Crush**: `crush`
 
 ### 终端适配说明
 程序会自动根据选择的终端类型调整启动参数：
@@ -182,7 +191,7 @@ ai_launcher.exe "C:\Users\Name\Documents\Articles"
 ## ⚙️ 系统要求
 
 - **操作系统**：Windows 7 或更高版本
-- **AI工具**：已安装对应的Claude、Qwen、Codex CLI工具
+- **AI工具**：已安装对应的Claude、Qwen、Codex、OpenCode、Gemini、Crush CLI工具
 - **权限**：注册右键菜单需要管理员权限
 - **磁盘空间**：约5MB
 
@@ -233,6 +242,9 @@ A: 确保Windows Terminal已正确安装，或尝试使用cmd.exe作为终端程
 - "Claude应用未安装或启动失败"
 - "Qwen应用未安装或启动失败"
 - "Codex应用未安装或启动失败"
+- "OpenCode应用未安装或启动失败"
+- "Gemini应用未安装或启动失败"
+- "Crush应用未安装或启动失败"
 
 #### 工作目录错误
 如果指定的工作目录不存在，会显示：
@@ -262,11 +274,11 @@ HKEY_CLASSES_ROOT\Directory\Background\shell\AITools
 
 ## 📝 版本信息
 
-- **版本**：3.1.0
-- **编译时间**：2024年11月
+- **版本**：3.2.0
+- **编译时间**：2024年11月30日
 - **开发语言**：C++ (Win32 API)
 - **目标系统**：Windows 10/11（兼容Windows 7+）
-- **新增特性**：终端选择和配置功能、右键菜单图标集成
+- **新增特性**：支持OpenCode、Gemini、Crush三个新AI工具，扩展工具支持至6个
 
 ## 🚀 快速开始
 
@@ -275,7 +287,7 @@ HKEY_CLASSES_ROOT\Directory\Background\shell\AITools
 3. **开始使用**：
    - 双击 `ai_launcher.exe` 直接启动
    - 或在任何文件夹右键选择"用AI工具打开"
-4. **享受AI工具**：使用数字键1、2、3快速启动对应AI工具
+4. **享受AI工具**：使用数字键1、2、3、4、5、6快速启动对应AI工具
 
 ---
 

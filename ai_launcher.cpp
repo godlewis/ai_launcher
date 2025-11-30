@@ -6,6 +6,9 @@
 #define ID_CLAUDE_BUTTON 1001
 #define ID_QWEN_BUTTON 1002
 #define ID_CODEX_BUTTON 1003
+#define ID_OPENCODE_BUTTON 1004
+#define ID_GEMINI_BUTTON 1005
+#define ID_CRUSH_BUTTON 1006
 
 // 窗口尺寸常量
 #define WINDOW_WIDTH 320
@@ -17,7 +20,7 @@
 
 // 常量定义
 #define MAX_PATH_LENGTH 1024
-#define MAX_TOOLS 3
+#define MAX_TOOLS 6
 
 // 设置为Windows子系统，避免控制台窗口
 #pragma comment(linker, "/subsystem:windows")
@@ -76,7 +79,10 @@ wchar_t g_workingDir[MAX_PATH_LENGTH] = L"";
 ToolInfo g_tools[MAX_TOOLS] = {
     {L"Claude", L"claude --dangerously-skip-permissions", 0, FALSE, ID_CLAUDE_BUTTON},
     {L"Qwen", L"qwen -y", 0, FALSE, ID_QWEN_BUTTON},
-    {L"Codex", L"codex.cmd", 0, FALSE, ID_CODEX_BUTTON}
+    {L"Codex", L"codex.cmd", 0, FALSE, ID_CODEX_BUTTON},
+    {L"OpenCode", L"opencode", 0, FALSE, ID_OPENCODE_BUTTON},
+    {L"Gemini", L"gemini --yolo", 0, FALSE, ID_GEMINI_BUTTON},
+    {L"Crush", L"crush", 0, FALSE, ID_CRUSH_BUTTON}
 };
 
 // 全局可用工具数量
@@ -203,7 +209,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 // 创建提示标签
                 CreateWindowW(
                     L"STATIC",
-                    L"未检测到可用的AI工具\n\n请确保已安装以下工具之一：\n• Claude CLI\n• Qwen CLI\n• Codex CLI\n\n点击重新检测按钮重试",
+                    L"未检测到可用的AI工具\n\n请确保已安装以下工具之一：\n• Claude CLI\n• Qwen CLI\n• Codex CLI\n• OpenCode CLI\n• Gemini CLI\n• Crush CLI\n\n点击重新检测按钮重试",
                     WS_CHILD | WS_VISIBLE | SS_CENTER,
                     20, layout.buttonStartY, rect.right - 40, 120,
                     hwnd,
@@ -219,7 +225,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
                     buttonX, layout.buttonStartY + 130, BUTTON_WIDTH, BUTTON_HEIGHT,
                     hwnd,
-                    (HMENU)1004, // 重新检测按钮ID
+                    (HMENU)1007, // 重新检测按钮ID
                     (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                     NULL
                 );
@@ -270,7 +276,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             int wmId = LOWORD(wParam);
 
             // 处理重新检测按钮
-            if (wmId == 1004) {
+            if (wmId == 1007) {
                 InitializeToolDetection();
                 // 重新创建窗口
                 DestroyWindow(hwnd);
