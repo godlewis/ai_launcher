@@ -274,7 +274,7 @@ HKEY_CLASSES_ROOT\Directory\Background\shell\AITools
 
 ## 📝 版本信息
 
-- **版本**：3.2.0
+- **版本**：1.0.7
 - **编译时间**：2024年11月30日
 - **开发语言**：C++ (Win32 API)
 - **目标系统**：Windows 10/11（兼容Windows 7+）
