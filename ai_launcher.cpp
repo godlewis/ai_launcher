@@ -41,7 +41,7 @@ struct ToolInfo {
     wchar_t* command;
     int shortcutKey;
     BOOL isAvailable;
-    HMENU buttonId;  // 改为HMENU类型以避免类型转换警告
+    int buttonId;  // 保持int类型，但在使用时正确转换
 };
 
 // 布局信息结构体
@@ -320,7 +320,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                             WS_TABSTOP | WS_VISIBLE | WS_CHILD | (toolIndex == 0 ? BS_DEFPUSHBUTTON : BS_PUSHBUTTON),
                             buttonX, buttonY, layout.buttonWidth, layout.buttonHeight,
                             hwnd,
-                            g_tools[i].buttonId,
+                            (HMENU)g_tools[i].buttonId,
                             (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                             NULL
                         );
