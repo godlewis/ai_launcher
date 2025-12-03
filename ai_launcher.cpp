@@ -10,6 +10,7 @@
 #define ID_GEMINI_BUTTON 1005
 #define ID_CRUSH_BUTTON 1006
 #define ID_IFLOW_BUTTON 1008
+#define ID_RECHECK_BUTTON 1007  // 重新检测按钮
 
 // 窗口尺寸常量
 #define WINDOW_WIDTH 320
@@ -281,7 +282,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
                     recheckButtonX, layout.buttonStartY + 130, BUTTON_WIDTH, BUTTON_HEIGHT,
                     hwnd,
-                    (HMENU)1007, // 重新检测按钮ID
+                    (HMENU)ID_RECHECK_BUTTON, // 重新检测按钮ID
                     (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                     NULL
                 );
