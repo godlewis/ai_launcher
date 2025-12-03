@@ -40,7 +40,7 @@ struct ToolInfo {
     wchar_t* command;
     int shortcutKey;
     BOOL isAvailable;
-    int buttonId;
+    HMENU buttonId;  // 改为HMENU类型以避免类型转换警告
 };
 
 // 布局信息结构体
@@ -319,7 +319,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                             WS_TABSTOP | WS_VISIBLE | WS_CHILD | (toolIndex == 0 ? BS_DEFPUSHBUTTON : BS_PUSHBUTTON),
                             buttonX, buttonY, layout.buttonWidth, layout.buttonHeight,
                             hwnd,
-                            (HMENU)g_tools[i].buttonId,
+                            g_tools[i].buttonId,
                             (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                             NULL
                         );
@@ -607,7 +607,7 @@ LayoutInfo CalculateLayout(int toolCount) {
             layout.columnSpacing = 0;
             break;
 
-        case SINGLE_COLUMN:
+        case SINGLE_COLUMN: {
             // 现有的单列布局逻辑
             layout.windowWidth = 320;
             layout.buttonWidth = 200;
@@ -625,8 +625,9 @@ LayoutInfo CalculateLayout(int toolCount) {
             layout.buttonStartY = 60 + (availableHeight - buttonsHeight) / 2;
             layout.buttonStartX = (layout.windowWidth - layout.buttonWidth) / 2;
             break;
+        }
 
-        case TWO_COLUMN_GRID:
+        case TWO_COLUMN_GRID: {
             // 新的2列布局逻辑
             layout.windowWidth = 450;
             layout.buttonWidth = 190;
@@ -636,17 +637,18 @@ LayoutInfo CalculateLayout(int toolCount) {
             layout.buttonSpacing = BUTTON_SPACING;
 
             // 计算窗口高度
-            buttonsHeight = layout.rows * BUTTON_HEIGHT + (layout.rows - 1) * layout.buttonSpacing;
+            int buttonsHeight = layout.rows * BUTTON_HEIGHT + (layout.rows - 1) * layout.buttonSpacing;
             layout.windowHeight = 80 + buttonsHeight + 40;
 
             // 计算按钮起始Y坐标（垂直居中）
-            availableHeight = layout.windowHeight - 120;
+            int availableHeight = layout.windowHeight - 120;
             layout.buttonStartY = 60 + (availableHeight - buttonsHeight) / 2;
 
             // 计算按钮起始X坐标（网格居中）
             int totalGridWidth = layout.columns * layout.buttonWidth + (layout.columns - 1) * layout.columnSpacing;
             layout.buttonStartX = (layout.windowWidth - totalGridWidth) / 2;
             break;
+        }
     }
 
     // 设置通用参数
