@@ -26,6 +26,13 @@
 #pragma comment(linker, "/subsystem:windows")
 #pragma comment(lib, "comctl32.lib")
 
+// 布局模式枚举
+enum LayoutMode {
+    SINGLE_TOOL_AUTO_LAUNCH,  // 单工具：自动启动
+    SINGLE_COLUMN,            // 2-4个工具：单列布局
+    TWO_COLUMN_GRID          // 5-6个工具：2列网格布局
+};
+
 // 工具信息结构体
 struct ToolInfo {
     wchar_t* name;
@@ -38,10 +45,23 @@ struct ToolInfo {
 // 布局信息结构体
 struct LayoutInfo {
     int availableToolCount;
+    LayoutMode mode;
+
+    // 窗口尺寸
     int windowWidth;
     int windowHeight;
+
+    // 按钮布局参数
+    int buttonWidth;
+    int buttonHeight;
+    int buttonStartX;
     int buttonStartY;
     int buttonSpacing;
+    int columnSpacing;  // 2列布局时的列间距
+
+    // 网格布局参数
+    int columns;
+    int rows;
 };
 
 // 终端配置注册表路径
@@ -63,6 +83,7 @@ wchar_t* ParseCommandLine(LPSTR lpCmdLine);
 BOOL IsToolAvailable(const wchar_t* command);
 void InitializeToolDetection();
 LayoutInfo CalculateLayout(int toolCount);
+LayoutMode DetermineLayoutMode(int toolCount);
 
 // 终端配置相关函数
 BOOL LoadTerminalConfig(wchar_t* terminalPath, DWORD pathSize, wchar_t* terminalName, DWORD nameSize);
@@ -114,19 +135,56 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // 计算动态布局
     LayoutInfo layout = CalculateLayout(g_availableToolCount);
 
+    // 检查是否为单工具自动启动场景
+    if (layout.mode == SINGLE_TOOL_AUTO_LAUNCH) {
+        // 找到唯一的可用工具
+        ToolInfo* singleTool = NULL;
+        for (int i = 0; i < MAX_TOOLS; i++) {
+            if (g_tools[i].isAvailable) {
+                singleTool = &g_tools[i];
+                break;
+            }
+        }
+
+        if (singleTool != NULL) {
+            // 加载终端配置
+            wchar_t terminalPath[MAX_PATH];
+            wchar_t terminalName[256];
+
+            if (LoadTerminalConfig(terminalPath, MAX_PATH, terminalName, 256)) {
+                // 使用配置的终端启动
+                LaunchWithTerminal(terminalPath, singleTool->command, g_workingDir[0] != L'\0' ? g_workingDir : NULL);
+            } else {
+                // 使用默认终端启动
+                LaunchWithDefaultTerminal(singleTool->command, g_workingDir[0] != L'\0' ? g_workingDir : NULL);
+            }
+            // LaunchWithTerminal 和 LaunchWithDefaultTerminal 函数内部已经有完整的错误处理
+            // 如果启动失败，用户会看到相应的错误消息
+            return 0; // 直接退出程序
+        } else {
+            // 异常情况：应该不会发生，但作为防御性编程
+            MessageBoxW(NULL, L"内部错误：检测到单工具但无法定位工具信息。\n\n程序将正常启动显示工具选择界面。",
+                       L"内部错误", MB_OK | MB_ICONWARNING);
+            // 继续执行到正常的UI创建流程
+        }
+    }
+
     // 注册窗口类
     static const wchar_t className[] = L"AILauncher";
 
-    WNDCLASSW wc = {};
+    WNDCLASSEXW wc = {};
+    wc.cbSize = sizeof(WNDCLASSEXW);
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = className;
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    // 使用系统图标，看起来更像AI应用
-    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    // 使用Windows内置的信息图标，更具科技感
+    wc.hIcon = LoadIcon(NULL, IDI_INFORMATION);
+    wc.hIconSm = LoadIcon(NULL, IDI_INFORMATION);
+    wc.style = CS_HREDRAW | CS_VREDRAW;
 
-    if (!RegisterClassW(&wc)) {
+    if (!RegisterClassExW(&wc)) {
         MessageBoxW(NULL, L"注册窗口类失败!", L"错误", MB_OK | MB_ICONERROR);
         return 1;
     }
@@ -198,11 +256,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             // 计算动态布局
             LayoutInfo layout = CalculateLayout(g_availableToolCount);
 
-            // 计算按钮水平居中位置
-            RECT rect;
-            GetClientRect(hwnd, &rect);
-            int buttonX = (rect.right - BUTTON_WIDTH) / 2;
-
             HWND firstButton = NULL;
 
             if (g_availableToolCount == 0) {
@@ -211,7 +264,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     L"STATIC",
                     L"未检测到可用的AI工具\n\n请确保已安装以下工具之一：\n• Claude CLI\n• Qwen CLI\n• Codex CLI\n• OpenCode CLI\n• Gemini CLI\n• Crush CLI\n\n点击重新检测按钮重试",
                     WS_CHILD | WS_VISIBLE | SS_CENTER,
-                    20, layout.buttonStartY, rect.right - 40, 120,
+                    20, layout.buttonStartY, layout.windowWidth - 40, 120,
                     hwnd,
                     NULL,
                     (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
@@ -219,11 +272,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 );
 
                 // 创建重新检测按钮
+                int recheckButtonX = (layout.windowWidth - BUTTON_WIDTH) / 2;
                 CreateWindowW(
                     L"BUTTON",
                     L"重新检测",
                     WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-                    buttonX, layout.buttonStartY + 130, BUTTON_WIDTH, BUTTON_HEIGHT,
+                    recheckButtonX, layout.buttonStartY + 130, BUTTON_WIDTH, BUTTON_HEIGHT,
                     hwnd,
                     (HMENU)1007, // 重新检测按钮ID
                     (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
@@ -231,25 +285,37 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 );
             } else {
                 // 为每个可用的工具创建按钮
+                int toolIndex = 0;
                 for (int i = 0; i < MAX_TOOLS; i++) {
                     if (g_tools[i].isAvailable) {
                         // 创建按钮文本
                         wchar_t buttonText[MAX_PATH];
                         wsprintfW(buttonText, L"%s (%c)", g_tools[i].name, (wchar_t)g_tools[i].shortcutKey);
 
-                        // 计算按钮Y坐标
-                        int toolIndex = 0;
-                        for (int j = 0; j < i; j++) {
-                            if (g_tools[j].isAvailable) toolIndex++;
+                        // 根据布局模式计算按钮位置
+                        int buttonX, buttonY;
+                        if (layout.mode == SINGLE_COLUMN) {
+                            // 单列布局：按钮水平居中，垂直排列
+                            buttonX = layout.buttonStartX;
+                            buttonY = layout.buttonStartY + toolIndex * (layout.buttonHeight + layout.buttonSpacing);
+                        } else if (layout.mode == TWO_COLUMN_GRID) {
+                            // 2列网格布局：按网格排列
+                            int column = toolIndex % 2;
+                            int row = toolIndex / 2;
+                            buttonX = layout.buttonStartX + column * (layout.buttonWidth + layout.columnSpacing);
+                            buttonY = layout.buttonStartY + row * (layout.buttonHeight + layout.buttonSpacing);
+                        } else {
+                            // 不应该到达这里，但提供默认值
+                            buttonX = 50;
+                            buttonY = 50 + toolIndex * 50;
                         }
-                        int buttonY = layout.buttonStartY + toolIndex * (BUTTON_HEIGHT + layout.buttonSpacing);
 
                         // 创建按钮
                         HWND hButton = CreateWindowW(
                             L"BUTTON",
                             buttonText,
                             WS_TABSTOP | WS_VISIBLE | WS_CHILD | (toolIndex == 0 ? BS_DEFPUSHBUTTON : BS_PUSHBUTTON),
-                            buttonX, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT,
+                            buttonX, buttonY, layout.buttonWidth, layout.buttonHeight,
                             hwnd,
                             (HMENU)g_tools[i].buttonId,
                             (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
@@ -260,6 +326,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         if (firstButton == NULL) {
                             firstButton = hButton;
                         }
+
+                        toolIndex++;
                     }
                 }
             }
@@ -509,30 +577,78 @@ void InitializeToolDetection() {
     }
 }
 
+// 确定布局模式
+LayoutMode DetermineLayoutMode(int toolCount) {
+    if (toolCount == 1) return SINGLE_TOOL_AUTO_LAUNCH;
+    if (toolCount <= 4) return SINGLE_COLUMN;
+    return TWO_COLUMN_GRID;
+}
+
 // 计算动态布局信息
 LayoutInfo CalculateLayout(int toolCount) {
-    LayoutInfo layout;
+    LayoutInfo layout = {0};
     layout.availableToolCount = toolCount;
-    layout.windowWidth = WINDOW_WIDTH; // 保持固定宽度
-    layout.buttonSpacing = BUTTON_SPACING;
+    layout.mode = DetermineLayoutMode(toolCount);
 
-    if (toolCount == 0) {
-        // 无工具时的布局
-        layout.windowHeight = 200;
-        layout.buttonStartY = 80;
-    } else {
-        // 计算基础高度（标题区域 + 边距）
-        int baseHeight = 80;
-        // 计算按钮占用的总高度
-        int buttonsHeight = toolCount * BUTTON_HEIGHT + (toolCount - 1) * layout.buttonSpacing;
-        // 计算总窗口高度
-        layout.windowHeight = baseHeight + buttonsHeight + 40; // 底部边距
+    switch (layout.mode) {
+        case SINGLE_TOOL_AUTO_LAUNCH:
+            // 不需要UI，返回最小尺寸
+            layout.windowWidth = 0;
+            layout.windowHeight = 0;
+            layout.buttonWidth = 0;
+            layout.buttonHeight = 0;
+            layout.columns = 0;
+            layout.rows = 0;
+            layout.buttonStartX = 0;
+            layout.buttonStartY = 0;
+            layout.buttonSpacing = 0;
+            layout.columnSpacing = 0;
+            break;
 
-        // 计算第一个按钮的Y坐标（垂直居中）
-        int availableHeight = layout.windowHeight - 120; // 减去顶部和底部边距
-        int totalButtonHeight = buttonsHeight;
-        layout.buttonStartY = 60 + (availableHeight - totalButtonHeight) / 2;
+        case SINGLE_COLUMN:
+            // 现有的单列布局逻辑
+            layout.windowWidth = 320;
+            layout.buttonWidth = 200;
+            layout.columns = 1;
+            layout.rows = toolCount;
+            layout.buttonSpacing = BUTTON_SPACING;
+            layout.columnSpacing = 0;
+
+            // 计算窗口高度
+            int buttonsHeight = toolCount * BUTTON_HEIGHT + (toolCount - 1) * layout.buttonSpacing;
+            layout.windowHeight = 80 + buttonsHeight + 40; // 顶部 + 按钮区域 + 底部边距
+
+            // 计算按钮起始Y坐标（垂直居中）
+            int availableHeight = layout.windowHeight - 120; // 减去顶部和底部边距
+            layout.buttonStartY = 60 + (availableHeight - buttonsHeight) / 2;
+            layout.buttonStartX = (layout.windowWidth - layout.buttonWidth) / 2;
+            break;
+
+        case TWO_COLUMN_GRID:
+            // 新的2列布局逻辑
+            layout.windowWidth = 450;
+            layout.buttonWidth = 190;
+            layout.columns = 2;
+            layout.columnSpacing = 30;
+            layout.rows = (toolCount + 1) / 2;  // 向上取整
+            layout.buttonSpacing = BUTTON_SPACING;
+
+            // 计算窗口高度
+            buttonsHeight = layout.rows * BUTTON_HEIGHT + (layout.rows - 1) * layout.buttonSpacing;
+            layout.windowHeight = 80 + buttonsHeight + 40;
+
+            // 计算按钮起始Y坐标（垂直居中）
+            availableHeight = layout.windowHeight - 120;
+            layout.buttonStartY = 60 + (availableHeight - buttonsHeight) / 2;
+
+            // 计算按钮起始X坐标（网格居中）
+            int totalGridWidth = layout.columns * layout.buttonWidth + (layout.columns - 1) * layout.columnSpacing;
+            layout.buttonStartX = (layout.windowWidth - totalGridWidth) / 2;
+            break;
     }
+
+    // 设置通用参数
+    layout.buttonHeight = BUTTON_HEIGHT;
 
     return layout;
 }
