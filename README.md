@@ -11,8 +11,8 @@
 ## 🚀 功能特性
 
 ### 核心功能
-- 🤖 **多AI工具支持**：智能检测并启动Claude、Qwen、Codex、OpenCode、Gemini、Crush等AI工具
-- ⌨️ **键盘快捷键**：动态分配数字键1、2、3、4、5、6快速启动
+- 🤖 **多AI工具支持**：智能检测并启动Claude、Qwen、Codex、OpenCode、Gemini、Crush、iflow等AI工具
+- ⌨️ **键盘快捷键**：动态分配数字键1、2、3、4、5、6、7快速启动
 - 📁 **工作目录支持**：支持命令行参数指定工作目录
 - 🌍 **环境变量继承**：完整继承用户环境变量和PATH配置
 - 🖱️ **右键菜单集成**：支持文件夹和文件夹背景右键菜单
@@ -74,6 +74,7 @@
    - **OpenCode (4)** - 启动OpenCode CLI
    - **Gemini (5)** - 启动Gemini CLI（带--yolo参数）
    - **Crush (6)** - 启动Crush CLI
+   - **iflow (7)** - 启动iflow CLI
 
 #### 键盘快捷键
 - **按 1** - 启动Claude
@@ -82,6 +83,7 @@
 - **按 4** - 启动OpenCode
 - **按 5** - 启动Gemini
 - **按 6** - 启动Crush
+- **按 7** - 启动iflow
 - **按 ESC** - 退出程序
 
 ### 3. 命令行参数（工作目录）
@@ -143,6 +145,7 @@ ai_launcher.exe "..\workspace"
 - **OpenCode**: `opencode`
 - **Gemini**: `gemini --yolo`
 - **Crush**: `crush`
+- **iflow**: `iflow`
 
 ### 终端适配说明
 程序会自动根据选择的终端类型调整启动参数：
@@ -191,7 +194,7 @@ ai_launcher.exe "C:\Users\Name\Documents\Articles"
 ## ⚙️ 系统要求
 
 - **操作系统**：Windows 7 或更高版本
-- **AI工具**：已安装对应的Claude、Qwen、Codex、OpenCode、Gemini、Crush CLI工具
+- **AI工具**：已安装对应的Claude、Qwen、Codex、OpenCode、Gemini、Crush、iflow CLI工具
 - **权限**：注册右键菜单需要管理员权限
 - **磁盘空间**：约5MB
 
@@ -245,6 +248,7 @@ A: 确保Windows Terminal已正确安装，或尝试使用cmd.exe作为终端程
 - "OpenCode应用未安装或启动失败"
 - "Gemini应用未安装或启动失败"
 - "Crush应用未安装或启动失败"
+- "iflow应用未安装或启动失败"
 
 #### 工作目录错误
 如果指定的工作目录不存在，会显示：
@@ -274,11 +278,11 @@ HKEY_CLASSES_ROOT\Directory\Background\shell\AITools
 
 ## 📝 版本信息
 
-- **版本**：1.0.7
-- **编译时间**：2024年11月30日
+- **版本**：1.0.8
+- **编译时间**：2024年12月3日
 - **开发语言**：C++ (Win32 API)
 - **目标系统**：Windows 10/11（兼容Windows 7+）
-- **新增特性**：支持OpenCode、Gemini、Crush三个新AI工具，扩展工具支持至6个
+- **新增特性**：支持iflow新AI工具，扩展工具支持至7个，优化7工具布局为2列4行显示
 
 ## 🚀 快速开始
 
@@ -287,7 +291,7 @@ HKEY_CLASSES_ROOT\Directory\Background\shell\AITools
 3. **开始使用**：
    - 双击 `ai_launcher.exe` 直接启动
    - 或在任何文件夹右键选择"用AI工具打开"
-4. **享受AI工具**：使用数字键1、2、3、4、5、6快速启动对应AI工具
+4. **享受AI工具**：使用数字键1、2、3、4、5、6、7快速启动对应AI工具
 
 ---
 
