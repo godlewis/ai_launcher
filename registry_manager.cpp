@@ -133,7 +133,7 @@ ToolInstallInfo g_toolsInfo[] = {
     {L"OpenCode", L"npm install -g opencode-ai", 2004, 2104},
     {L"Gemini", L"npm install -g @google/gemini-cli", 2005, 2105},
     {L"Crush", L"npm install -g @charmland/crush", 2006, 2106},
-    {L"iflow", L"npm install -g @iflow/cli", 2007, 2107}
+    {L"iflow", L"npm install -g @iflow-ai/iflow-cli@latest", 2007, 2107}
 };
 
 // 显示AI工具安装向导
