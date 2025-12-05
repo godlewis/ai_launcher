@@ -3,6 +3,8 @@
 #include <shlobj.h>
 #include <shlwapi.h>
 #include <windowsx.h>
+#include <stdio.h>
+#include <wchar.h>
 
 // 按钮ID定义
 #define ID_REGISTER_BUTTON 1001
@@ -53,6 +55,7 @@ BOOL ValidateTerminal(const wchar_t* terminalPath);
 BOOL SaveTerminalConfig(const wchar_t* terminalPath, const wchar_t* terminalName);
 BOOL LoadTerminalConfig(wchar_t* terminalPath, DWORD pathSize, wchar_t* terminalName, DWORD nameSize);
 BOOL BrowseForTerminal(HWND hwnd, wchar_t* selectedPath, DWORD pathSize);
+BOOL BuildTerminalCommand(const wchar_t* terminalPath, const wchar_t* aiLauncherPath, const wchar_t* workingDir, wchar_t* command, DWORD commandSize);
 
 // AI工具安装向导相关函数
 void ShowInstallationWizard(HWND hwnd);
@@ -671,8 +674,18 @@ BOOL FindAILauncherPath(wchar_t* path, DWORD pathSize) {
 BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath) {
     HKEY hKey = NULL;
     BOOL success = TRUE;
-    wchar_t command[MAX_PATH + 20];
+    wchar_t command[2048]; // 增加缓冲区大小以容纳终端命令
     wchar_t iconValue[MAX_PATH + 10];
+
+    // 获取配置的终端路径
+    wchar_t terminalPath[MAX_PATH] = L"";
+    wchar_t terminalName[256] = L"";
+    LoadTerminalConfig(terminalPath, MAX_PATH, terminalName, 256);
+
+    // 如果没有配置终端，使用默认的cmd.exe
+    if (wcslen(terminalPath) == 0) {
+        wcscpy(terminalPath, L"C:\\Windows\\System32\\cmd.exe");
+    }
 
     // 1. 注册到Directory（文件夹右键菜单）
     if (RegCreateKeyExW(HKEY_CLASSES_ROOT, REGISTRY_PATH_DIR, 0, NULL,
@@ -698,13 +711,16 @@ BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath) {
         // 创建command子项
         if (RegCreateKeyExW(HKEY_CLASSES_ROOT, COMMAND_PATH_DIR, 0, NULL,
                            REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-            // 设置启动命令
-            wcscpy(command, L"\"");
-            wcscat(command, aiLauncherPath);
-            wcscat(command, L"\" \"%1\"");
-            if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)command,
-                              (wcslen(command) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
-                ShowMessage(hwnd, L"无法设置文件夹启动命令", TRUE);
+
+            // 使用配置的终端启动ai_launcher.exe，并传递文件夹路径参数
+            if (BuildTerminalCommand(terminalPath, aiLauncherPath, L"\"%1\"", command, 2048)) {
+                if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)command,
+                                  (wcslen(command) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
+                    ShowMessage(hwnd, L"无法设置文件夹启动命令", TRUE);
+                    success = FALSE;
+                }
+            } else {
+                ShowMessage(hwnd, L"无法构建终端启动命令", TRUE);
                 success = FALSE;
             }
             RegCloseKey(hKey);
@@ -741,13 +757,16 @@ BOOL RegisterContextMenu(HWND hwnd, const wchar_t* aiLauncherPath) {
         // 创建command子项
         if (RegCreateKeyExW(HKEY_CLASSES_ROOT, COMMAND_PATH_BACKGROUND, 0, NULL,
                            REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-            // 设置启动命令
-            wcscpy(command, L"\"");
-            wcscat(command, aiLauncherPath);
-            wcscat(command, L"\" \"%V\"");
-            if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)command,
-                              (wcslen(command) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
-                ShowMessage(hwnd, L"无法设置背景启动命令", TRUE);
+
+            // 使用配置的终端启动ai_launcher.exe，并传递当前目录路径参数
+            if (BuildTerminalCommand(terminalPath, aiLauncherPath, L"\"%V\"", command, 2048)) {
+                if (RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)command,
+                                  (wcslen(command) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
+                    ShowMessage(hwnd, L"无法设置背景启动命令", TRUE);
+                    success = FALSE;
+                }
+            } else {
+                ShowMessage(hwnd, L"无法构建终端启动命令", TRUE);
                 success = FALSE;
             }
             RegCloseKey(hKey);
@@ -881,4 +900,35 @@ BOOL BrowseForTerminal(HWND hwnd, wchar_t* selectedPath, DWORD pathSize) {
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
 
     return GetOpenFileNameW(&ofn);
+}
+
+// 构建终端启动命令
+BOOL BuildTerminalCommand(const wchar_t* terminalPath, const wchar_t* aiLauncherPath, const wchar_t* pathPlaceholder, wchar_t* command, DWORD commandSize) {
+    if (!terminalPath || !aiLauncherPath || !command || commandSize < MAX_PATH * 3) {
+        return FALSE;
+    }
+
+    wchar_t* fileName = wcsrchr((wchar_t*)terminalPath, L'\\');
+    if (fileName) {
+        fileName++; // 跳过反斜杠
+    } else {
+        fileName = (wchar_t*)terminalPath;
+    }
+
+    // 根据不同终端类型构建命令
+    if (wcsstr(fileName, L"wt.exe") || wcsstr(fileName, L"WindowsTerminal.exe")) {
+        // Windows Terminal: 使用cmd作为默认配置文件
+        swprintf(command, L"\"%s\" cmd /k \"%s\" %s", terminalPath, aiLauncherPath, pathPlaceholder);
+    } else if (wcsstr(fileName, L"powershell.exe")) {
+        // PowerShell: 需要特殊处理参数
+        swprintf(command, L"\"%s\" -Command \"%s\" %s", terminalPath, aiLauncherPath, pathPlaceholder);
+    } else if (wcsstr(fileName, L"pwsh.exe")) {
+        // PowerShell Core
+        swprintf(command, L"\"%s\" -Command \"%s\" %s", terminalPath, aiLauncherPath, pathPlaceholder);
+    } else {
+        // 默认终端 (cmd.exe)
+        swprintf(command, L"\"%s\" /k \"%s\" %s", terminalPath, aiLauncherPath, pathPlaceholder);
+    }
+
+    return TRUE;
 }
