@@ -10,6 +10,7 @@
 #define ID_GEMINI_BUTTON 1005
 #define ID_CRUSH_BUTTON 1006
 #define ID_IFLOW_BUTTON 1008
+#define ID_NEOVATE_BUTTON 1009
 #define ID_RECHECK_BUTTON 1007  // 重新检测按钮
 
 // 窗口尺寸常量
@@ -22,7 +23,7 @@
 
 // 常量定义
 #define MAX_PATH_LENGTH 1024
-#define MAX_TOOLS 7
+#define MAX_TOOLS 8
 
 // 设置为Windows子系统，避免控制台窗口
 #pragma comment(linker, "/subsystem:windows")
@@ -106,7 +107,8 @@ ToolInfo g_tools[MAX_TOOLS] = {
     {L"OpenCode", L"opencode", 0, FALSE, ID_OPENCODE_BUTTON},
     {L"Gemini", L"gemini --yolo", 0, FALSE, ID_GEMINI_BUTTON},
     {L"Crush", L"crush", 0, FALSE, ID_CRUSH_BUTTON},
-    {L"iflow", L"iflow", 0, FALSE, ID_IFLOW_BUTTON}
+    {L"iflow", L"iflow", 0, FALSE, ID_IFLOW_BUTTON},
+    {L"neovate", L"neovate --approval-mode yolo", 0, FALSE, ID_NEOVATE_BUTTON}
 };
 
 // 全局可用工具数量
@@ -265,7 +267,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 // 创建提示标签
                 CreateWindowW(
                     L"STATIC",
-                    L"未检测到可用的AI工具\n\n请确保已安装以下工具之一：\n• Claude CLI\n• Qwen CLI\n• Codex CLI\n• OpenCode CLI\n• Gemini CLI\n• Crush CLI\n• iflow CLI\n\n点击重新检测按钮重试",
+                    L"未检测到可用的AI工具\n\n请确保已安装以下工具之一：\n• Claude CLI\n• Qwen CLI\n• Codex CLI\n• OpenCode CLI\n• Gemini CLI\n• Crush CLI\n• iflow CLI\n• neovate CLI\n\n点击重新检测按钮重试",
                     WS_CHILD | WS_VISIBLE | SS_CENTER,
                     20, layout.buttonStartY, layout.windowWidth - 40, 120,
                     hwnd,

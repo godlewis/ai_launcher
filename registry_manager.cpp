@@ -125,7 +125,7 @@ struct ToolInstallInfo {
     int installButtonId;
 };
 
-// 7个AI工具的安装信息
+// 8个AI工具的安装信息
 ToolInstallInfo g_toolsInfo[] = {
     {L"Claude", L"npm install -g @anthropic-ai/claude-code", 2001, 2101},
     {L"Qwen", L"npm install -g @qwen-code/qwen-code@latest", 2002, 2102},
@@ -133,7 +133,8 @@ ToolInstallInfo g_toolsInfo[] = {
     {L"OpenCode", L"npm install -g opencode-ai", 2004, 2104},
     {L"Gemini", L"npm install -g @google/gemini-cli", 2005, 2105},
     {L"Crush", L"npm install -g @charmland/crush", 2006, 2106},
-    {L"iflow", L"npm install -g @iflow-ai/iflow-cli@latest", 2007, 2107}
+    {L"iflow", L"npm install -g @iflow-ai/iflow-cli@latest", 2007, 2107},
+    {L"neovate", L"npm install -g @neovate/code", 2008, 2108}
 };
 
 // 显示AI工具安装向导
@@ -157,7 +158,7 @@ void ShowInstallationWizard(HWND hwndParent) {
     
     // 计算对话框尺寸和位置 - 增加宽度以留出右边距
     const int dialogWidth = 560; // 从500增加到560，留出右边距
-    const int dialogHeight = 500; // 7个工具 × 60像素 + 标题栏和边距
+    const int dialogHeight = 560; // 8个工具 × 60像素 + 标题栏和边距
     
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -210,7 +211,7 @@ LRESULT CALLBACK InstallWizardProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
             const int spacing = 10;
             const int rightMargin = 30; // 右边距，让按钮与窗口边缘保持间距
             
-            for (int i = 0; i < 7; i++) {
+            for (int i = 0; i < 8; i++) {
                 // 工具名称标签
                 CreateWindowW(
                     L"STATIC",
@@ -269,7 +270,7 @@ LRESULT CALLBACK InstallWizardProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
             int wmId = LOWORD(wParam);
             
             // 查找对应的工具
-            for (int i = 0; i < 7; i++) {
+            for (int i = 0; i < 8; i++) {
                 if (wmId == g_toolsInfo[i].copyButtonId) {
                     // 复制安装命令到剪贴板
                     CopyToClipboard(g_toolsInfo[i].installCommand);
