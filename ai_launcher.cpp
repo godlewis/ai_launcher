@@ -513,14 +513,45 @@ int main(int argc, char* argv[]) {
         }
 
         if (singleTool != NULL) {
-            wprintf(L"检测到唯一可用工具：%ls %ls\n", singleTool->emoji, singleTool->name);
+            wprintf(L"✓ 检测到唯一可用工具：[1] %ls %ls\n", singleTool->emoji, singleTool->name);
             SetConsoleColor(COLOR_LAUNCH);
             wprintf(L"🚀 正在自动启动 %ls...\n\n", singleTool->name);
             ResetConsoleColor();
             Sleep(1000); // 短暂延迟以显示消息
 
-            // 直接在当前控制台执行工具命令
-            _wsystem(singleTool->command);
+            // 使用ShellExecute启动工具，不等待其完成
+            SHELLEXECUTEINFOW sei = {0};
+            sei.cbSize = sizeof(SHELLEXECUTEINFOW);
+            sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+            sei.hwnd = NULL;
+            sei.lpVerb = L"open";
+            sei.lpFile = L"cmd.exe";
+
+            // 构建命令行参数，在新窗口中执行工具命令
+            wchar_t command[1024];
+            wcscpy(command, L"/k \"");
+            if (g_workingDir[0] != L'\0') {
+                wcscat(command, L"cd /d \"");
+                wcscat(command, g_workingDir);
+                wcscat(command, L"\" && ");
+            }
+            wcscat(command, singleTool->command);
+            wcscat(command, L"\"");
+
+            sei.lpParameters = command;
+            sei.nShow = SW_SHOWNORMAL;
+
+            // 如果有工作目录，设置工作目录
+            if (g_workingDir[0] != L'\0') {
+                sei.lpDirectory = g_workingDir;
+            }
+
+            // 启动工具
+            ShellExecuteExW(&sei);
+
+            wprintf(L"✅ AI工具已在新窗口中启动\n");
+            wprintf(L"ai_launcher 即将退出...\n");
+            Sleep(1000);
             return 0;
         }
     }
@@ -552,23 +583,61 @@ int main(int argc, char* argv[]) {
         for (int i = 0; i < MAX_TOOLS; i++) {
             if (g_tools[i].isAvailable && g_tools[i].shortcutKey == key) {
                 found = true;
-                // 在当前终端直接启动工具
+                // 显示用户选择的序号和工具信息
                 wprintf(L"\n");
                 SetConsoleColor(COLOR_LAUNCH);
+                wprintf(L"✓ 您选择了 [%lc] %ls %ls", g_tools[i].shortcutKey, g_tools[i].emoji, g_tools[i].name);
+                ResetConsoleColor();
+                wprintf(L"\n");
+                SetConsoleColor(COLOR_TITLE);
                 wprintf(L"🚀 正在启动 %ls...", g_tools[i].name);
                 ResetConsoleColor();
                 wprintf(L"\n\n");
 
-                // 直接在当前控制台执行命令
-                _wsystem(g_tools[i].command);
+                // 启动工具后立即退出ai_launcher
+                // 使用ShellExecute来启动工具，不等待其完成
+                SHELLEXECUTEINFOW sei = {0};
+                sei.cbSize = sizeof(SHELLEXECUTEINFOW);
+                sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+                sei.hwnd = NULL;
+                sei.lpVerb = L"open";
+                sei.lpFile = L"cmd.exe";
 
-                // 工具执行完毕，提示用户
-                wprintf(L"\n\n");
-                SetConsoleColor(COLOR_PROMPT);
-                wprintf(L"✅ 工具执行完毕。按任意键返回主菜单...");
+                // 构建命令行参数，在新窗口中执行工具命令
+                wchar_t command[1024];
+                wcscpy(command, L"/k \"");
+                if (g_workingDir[0] != L'\0') {
+                    wcscat(command, L"cd /d \"");
+                    wcscat(command, g_workingDir);
+                    wcscat(command, L"\" && ");
+                }
+                wcscat(command, g_tools[i].command);
+                wcscat(command, L"\"");
+
+                sei.lpParameters = command;
+                sei.nShow = SW_SHOWNORMAL;
+
+                // 如果有工作目录，设置工作目录
+                if (g_workingDir[0] != L'\0') {
+                    sei.lpDirectory = g_workingDir;
+                }
+
+                // 启动工具
+                ShellExecuteExW(&sei);
+
+                // 显示启动完成消息
+                wprintf(L"\n");
+                SetConsoleColor(COLOR_TITLE);
+                wprintf(L"✅ AI工具已在新窗口中启动");
                 ResetConsoleColor();
-                _getwch();
-                break;
+                wprintf(L"\n");
+                SetConsoleColor(COLOR_PROMPT);
+                wprintf(L"ai_launcher 即将退出...");
+                ResetConsoleColor();
+                wprintf(L"\n");
+
+                Sleep(1000); // 短暂延迟让用户看到消息
+                return 0; // 直接退出程序
             }
         }
 
